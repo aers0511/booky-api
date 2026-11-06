@@ -1,25 +1,17 @@
 # Booky API (Vercel + Gemini)
 
-Endpoint serverless compatible con el frontend actual de Booky. Recibe `{ message, history, page }` y responde `{ answer }`.
+Backend serverless para el frontend de Booky. Recibe `POST { message, history, page }` y responde `{ answer }`.
 
 ## Variables de entorno en Vercel
 
-- `GEMINI_API_KEY`: clave de Google AI Studio. Guardarla como Environment Variable, nunca en el frontend ni en Git.
-- `GEMINI_MODEL`: opcional. Valor inicial `gemini-3.8-flash`.
-- `ALLOWED_ORIGINS`: opcional. Orígenes permitidos separados por coma. Por defecto `https://sib.itson.edu.mx,https://biblioteca.itson.mx`.
+- `GEMINI_API_KEY`: clave de Google AI Studio. Guardarla como Environment Variable; nunca en el frontend ni en Git.
+- `GEMINI_MODEL`: opcional; por defecto `gemini-3.8-flash`.
+- `ALLOWED_ORIGINS`: opcional; orígenes separados por coma. Por defecto `https://sib.itson.edu.mx,https://biblioteca.itson.mx`.
 
 ## Despliegue
 
-Importar este proyecto en Vercel y agregar las variables de entorno antes de desplegar. La ruta quedará como `https://TU-PROYECTO.vercel.app/api/booky`.
+Importa este proyecto en Vercel, configura las variables de entorno y despliega. El endpoint será `https://TU-PROYECTO.vercel.app/api/booky`.
 
-En el frontend actual de Booky, cambiar `CONFIG.aiEndpoint` por la URL absoluta del endpoint de Vercel. No incluir la clave de Gemini en el HTML.
+En el HTML de Booky, configura `aiEndpoint` con la URL absoluta del endpoint. Nunca incluyas la clave de Gemini en el HTML.
 
-## Prueba
-
-Enviar un POST JSON a `/api/booky` con `Content-Type: application/json` y cuerpo:
-
-```json
-{"message":"Hola, Booky","history":[],"page":"/"}
-```
-
-Respuesta esperada: `{"answer":"..."}`.
+La función usa la API REST `models.generateContent` de Gemini y devuelve errores estructurados si el proveedor falla o tarda demasiado.
