@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/booky.js": {
+      "maxDuration": 30
+    }
+  }
+}
