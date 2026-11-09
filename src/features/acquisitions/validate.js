@@ -9,6 +9,18 @@ function compactIdentifier(value) {
   return String(value || '').toUpperCase().replace(/[^0-9X]/g, '');
 }
 
+function meaningfulTokens(value) {
+  const ignored = new Set(['a', 'an', 'and', 'de', 'del', 'la', 'las', 'el', 'los', 'y', 'the', 'of']);
+  return [...new Set(fold(value).split(' ').filter(token => token.length > 1 && !ignored.has(token)))];
+}
+
+function overlapRatio(left, right) {
+  if (!left.length || !right.length) return 0;
+  const rightSet = new Set(right);
+  const overlap = left.filter(token => rightSet.has(token)).length;
+  return overlap / Math.min(left.length, right.length);
+}
+
 function validIsbn(value) {
   const id = compactIdentifier(value);
   if (/^\d{13}$/.test(id)) {
@@ -47,30 +59,40 @@ function identifierStatus(book) {
 function scoreMatch(request, record) {
   const reqTitle = fold(request.title);
   const recTitle = fold(record.title);
-  const reqAuthor = fold(request.author);
-  const recAuthor = fold(record.author);
+  const reqTitleTokens = meaningfulTokens(request.title);
+  const recTitleTokens = meaningfulTokens(record.title);
+  const reqAuthorTokens = meaningfulTokens(request.author);
+  const recAuthorTokens = meaningfulTokens(record.author);
   const reqId = compactIdentifier(request.identifier);
   const recId = compactIdentifier(record.isbn);
 
   const identifierExact = Boolean(reqId && recId && reqId === recId);
   const titleExact = Boolean(reqTitle && recTitle && reqTitle === recTitle);
-  const titleSimilar = Boolean(reqTitle && recTitle && (
-    reqTitle.includes(recTitle) || recTitle.includes(reqTitle) ||
-    reqTitle.split(' ').filter(word => word.length > 2 && recTitle.includes(word)).length >= Math.min(3, reqTitle.split(' ').length)
-  ));
-  const authorSimilar = Boolean(reqAuthor && recAuthor && (
-    reqAuthor === recAuthor || reqAuthor.includes(recAuthor) || recAuthor.includes(reqAuthor)
-  ));
+  const titleOverlap = overlapRatio(reqTitleTokens, recTitleTokens);
+  const titleSimilar = Boolean(titleOverlap >= 0.75);
+  const authorOverlap = overlapRatio(reqAuthorTokens, recAuthorTokens);
+  const authorSimilar = Boolean(
+    reqAuthorTokens.length && recAuthorTokens.length && authorOverlap >= 0.6
+  );
 
-  let level = 'possible_match';
-  if (identifierExact || (titleExact && (!reqAuthor || authorSimilar))) level = 'exact_match';
-  else if (!titleSimilar && !authorSimilar) return null;
+  if (!identifierExact && !titleSimilar) return null;
+
+  // Un título idéntico sin autor coincidente no se declara exacto:
+  // puede tratarse de otra obra con el mismo título.
+  const exact = identifierExact || (titleExact && authorSimilar);
+  const score = identifierExact ? 100
+    : exact ? 97
+    : titleExact && !reqAuthorTokens.length ? 90
+    : titleExact ? 84
+    : titleSimilar && authorSimilar ? 78
+    : titleSimilar ? 62 : 0;
 
   return {
-    level,
-    score: identifierExact ? 100 : titleExact && authorSimilar ? 95 : titleExact ? 85 : titleSimilar && authorSimilar ? 75 : titleSimilar ? 60 : 40,
+    level: exact ? 'exact_match' : 'possible_match',
+    score,
     identifierExact,
     titleExact,
+    titleSimilar,
     authorSimilar
   };
 }
@@ -84,12 +106,46 @@ function dedupeRecords(records) {
   return [...map.values()];
 }
 
+/**
+ * Consolida los ejemplares por biblioteca, ubicación, clasificación y estado.
+ * No elimina ejemplares repetidos: los cuenta en quantity.
+ */
+function summarizeHoldings(items = []) {
+  const groups = new Map();
+
+  for (const item of items) {
+    const normalized = {
+      campus: item.campus || 'Ubicación no indicada',
+      branch_code: item.branchCode || null,
+      location: item.location || null,
+      callnumber: item.callnumber || null,
+      status: item.status || 'Estado no informado'
+    };
+    const key = [
+      normalized.branch_code || normalized.campus,
+      normalized.location || '',
+      normalized.callnumber || '',
+      normalized.status
+    ].join('|');
+
+    const current = groups.get(key);
+    if (current) current.quantity += 1;
+    else groups.set(key, { ...normalized, quantity: 1 });
+  }
+
+  return [...groups.values()].sort((a, b) =>
+    String(a.campus).localeCompare(String(b.campus), 'es') ||
+    String(a.status).localeCompare(String(b.status), 'es')
+  );
+}
+
 async function validateBookAgainstCatalog(config, book) {
   if (!isConfigured(config.koha)) {
     return {
       status: 'pending',
       catalog_checked: false,
       matches: [],
+      matches_found: 0,
       message: 'La conexión con el catálogo Koha no está configurada.'
     };
   }
@@ -127,6 +183,7 @@ async function validateBookAgainstCatalog(config, book) {
         return { ...record, items: [], itemsUnavailable: true };
       }
     }));
+
     const idCheck = identifierStatus(book);
     return {
       status: ranked.some(item => item.match.level === 'exact_match')
@@ -134,35 +191,42 @@ async function validateBookAgainstCatalog(config, book) {
         : ranked.length ? 'possible_match' : 'not_found',
       catalog_checked: true,
       identifier_validation: idCheck,
-      matches: withHoldings.map(record => ({
-        biblio_id: record.biblioId,
-        title: record.title,
-        author: record.author,
-        isbn: record.isbn,
-        publisher: record.publisher,
-        edition: record.edition,
-        year: record.year,
-        url: record.url,
-        match: record.match,
-        holdings: (record.items || []).map(item => ({
-          campus: item.campus,
-          branch_code: item.branchCode,
-          location: item.location,
-          callnumber: item.callnumber,
-          status: item.status
-        })),
-        holdings_unavailable: Boolean(record.itemsUnavailable)
-      }))
+      matches_found: ranked.length,
+      matches: withHoldings.map(record => {
+        const holdings = summarizeHoldings(record.items || []);
+        return {
+          biblio_id: record.biblioId,
+          title: record.title,
+          author: record.author,
+          isbn: record.isbn,
+          publisher: record.publisher,
+          edition: record.edition,
+          year: record.year,
+          url: record.url,
+          match: record.match,
+          total_items: (record.items || []).length,
+          holdings,
+          holdings_unavailable: Boolean(record.itemsUnavailable)
+        };
+      })
     };
   } catch (error) {
     return {
       status: 'pending',
       catalog_checked: false,
       matches: [],
+      matches_found: 0,
       message: 'No fue posible completar la consulta a Koha. La solicitud requiere validación posterior.',
       catalog_error: error?.code || 'koha_error'
     };
   }
 }
 
-module.exports = { validateBookAgainstCatalog, identifierStatus, validIsbn, validIssn, scoreMatch };
+module.exports = {
+  validateBookAgainstCatalog,
+  identifierStatus,
+  validIsbn,
+  validIssn,
+  scoreMatch,
+  summarizeHoldings
+};

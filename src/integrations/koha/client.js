@@ -120,6 +120,7 @@ function campusName(code) {
     NAI: 'Obregón Náinari',
     CEN: 'Obregón Centro',
     GYM: 'Guaymas',
+    EMP: 'Empalme',
     EMPL: 'Empalme',
     NAV: 'Navojoa',
     BV: 'Biblioteca Virtual'

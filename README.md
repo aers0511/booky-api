@@ -221,3 +221,12 @@ Cada elemento de `results` incluye `original`, `normalized`, `quantities`, `vali
 `not_found` no garantiza que el material no exista: significa que las consultas ejecutadas no devolvieron coincidencias. Las búsquedas están limitadas por `ACQUISITIONS_MAX_RESULTS` por consulta; ajusta ese límite si el volumen del catálogo lo requiere.
 
 El endpoint solo consulta Koha mediante las operaciones GET ya utilizadas por el cliente existente. No crea registros bibliográficos, ejemplares, solicitudes de compra ni modifica datos en Koha.
+
+
+### Ajustes de coincidencias y existencias (adquisiciones)
+
+- Una coincidencia por título idéntico ya no se clasifica como exacta si el autor proporcionado no coincide. La coincidencia exacta requiere ISBN/ISSN idéntico o título y autor coincidentes.
+- La comparación de autores ignora acentos, orden de apellidos/nombres e iniciales aisladas; compartir únicamente una inicial no basta para considerar autores similares.
+- Los ejemplares se agrupan en `holdings` por biblioteca, ubicación, clasificación y estado. El campo `quantity` indica cuántos ejemplares hay en ese grupo y `total_items` indica el total recuperado para el registro.
+- `validation.matches_found` representa el total de coincidencias encontradas por la búsqueda; `validation.matches_returned` indica cuántas se incluyen en la respuesta (máximo cinco).
+- Se reconoce `EMP` como código alternativo de Empalme, además de `EMPL`.

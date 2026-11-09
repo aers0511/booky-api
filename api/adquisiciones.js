@@ -108,7 +108,8 @@ module.exports = async function handler(req, res) {
         validation: {
           catalog_checked: catalog.catalog_checked,
           identifier: catalog.identifier_validation || null,
-          matches_found: catalog.matches.length,
+          matches_found: catalog.matches_found ?? catalog.matches.length,
+          matches_returned: catalog.matches.length,
           decision: catalog.status === 'pending' ? 'pending_review' :
             catalog.status === 'not_found' ? 'no_match_found' : 'review_match'
         },
