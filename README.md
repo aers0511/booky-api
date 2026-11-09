@@ -6,7 +6,8 @@ Backend serverless para Vercel. Mantiene Gemini como motor conversacional y agre
 
 ```text
 api/
-  booky.js                   Punto de entrada HTTP de Booky
+  booky.js                   Punto de entrada HTTP conversacional de Booky
+  adquisiciones.js           Endpoint independiente para validar solicitudes de compra
 src/
   config.js                  Variables de entorno
   http.js                    CORS y respuestas HTTP
@@ -126,3 +127,97 @@ Ejemplos futuros: consulta de recursos digitales, ayuda para APA, información d
 - La búsqueda de Koha usa el filtro JSON del parámetro `q` documentado por Koha REST API. Los campos bibliográficos pueden variar por versión/configuración; si la instalación devuelve `invalid_query`, hay que ajustar los campos de búsqueda a la respuesta real de ITSON.
 - Las respuestas de catálogo se renderizan con el mismo sistema de tarjetas de Booky tanto si el usuario inicia la búsqueda escribiendo como si la inicia desde el botón “Buscar en catálogo”. El botón de búsqueda ya no utiliza el extractor HTML local de Koha para mostrar resultados.
 - La integración no se ha probado contra el servidor de producción de ITSON porque no se proporcionaron credenciales ni se realizó una consulta autenticada.
+
+
+## Endpoint independiente de adquisiciones
+
+Se agrega `POST /api/adquisiciones` sin modificar el endpoint conversacional `/api/booky` ni el registro de funciones existentes.
+
+Está diseñado para que Google Apps Script envíe uno o varios libros de una solicitud institucional. Para cada libro:
+
+1. Conserva los datos originales recibidos.
+2. Usa Gemini para corregir formato, capitalización, acentos y errores evidentes, sin inventar campos ausentes.
+3. Consulta el catálogo Koha por identificador y título, sin filtrar por campus.
+4. Devuelve coincidencias bibliográficas y ejemplares/sucursales cuando Koha los proporciona.
+5. Distingue `exact_match`, `possible_match`, `not_found` y `pending`.
+6. Nunca bloquea la solicitud: las coincidencias generan advertencias para que el docente pueda justificar la compra de más ejemplares.
+
+### Seguridad y configuración
+
+Configura en Vercel:
+
+- `ACQUISITIONS_API_KEY`: clave secreta larga y aleatoria, exclusiva para este endpoint.
+- `ACQUISITIONS_MAX_BOOKS`: máximo de libros por petición (15 por defecto).
+- `ACQUISITIONS_MAX_RESULTS`: máximo de registros consultados por búsqueda (10 por defecto).
+- Las variables existentes `GEMINI_API_KEY`, `KOHA_ENABLED`, `KOHA_API_USERNAME` y `KOHA_API_PASSWORD`.
+
+Google Apps Script debe enviar la clave en el encabezado `x-api-key`. Guarda la clave en **Propiedades del script**; no la incrustes en una página HTML pública. CORS no sustituye esta autenticación.
+
+### Ejemplo de petición
+
+```json
+{
+  "books": [
+    {
+      "title": "administracion de inventarios",
+      "author": "carlos a garcia",
+      "publisher": "mc graw hill",
+      "edition": "segunda edicion",
+      "year": "2022",
+      "identifier": "9786071500000",
+      "identifier_type": "ISBN",
+      "quantities": {
+        "CEN": 2,
+        "NAI": 1,
+        "GYM": 0,
+        "NAV": 0,
+        "EMPL": 0
+      }
+    }
+  ]
+}
+```
+
+### Ejemplo de llamada desde Apps Script
+
+```javascript
+function validarLibrosEnBooky_(books) {
+  const properties = PropertiesService.getScriptProperties();
+  const apiKey = properties.getProperty('BOOKY_ACQUISITIONS_API_KEY');
+
+  if (!apiKey) throw new Error('Falta BOOKY_ACQUISITIONS_API_KEY en Propiedades del script.');
+
+  const response = UrlFetchApp.fetch(
+    'https://booky-api.vercel.app/api/adquisiciones',
+    {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-api-key': apiKey },
+      payload: JSON.stringify({ books: books }),
+      muteHttpExceptions: true
+    }
+  );
+
+  const status = response.getResponseCode();
+  const body = JSON.parse(response.getContentText());
+
+  if (status < 200 || status >= 300) {
+    throw new Error(body.error || 'No fue posible validar los libros en Booky.');
+  }
+
+  return body;
+}
+```
+
+### Respuesta
+
+Cada elemento de `results` incluye `original`, `normalized`, `quantities`, `validation`, `matches` y `warnings`. Los estados posibles son:
+
+- `exact_match`: coincidencia fuerte por identificador o título/autor.
+- `possible_match`: coincidencia parcial que requiere revisión.
+- `not_found`: no se encontraron coincidencias en las búsquedas realizadas.
+- `pending`: Koha no pudo consultarse; no se debe interpretar como ausencia del libro.
+
+`not_found` no garantiza que el material no exista: significa que las consultas ejecutadas no devolvieron coincidencias. Las búsquedas están limitadas por `ACQUISITIONS_MAX_RESULTS` por consulta; ajusta ese límite si el volumen del catálogo lo requiere.
+
+El endpoint solo consulta Koha mediante las operaciones GET ya utilizadas por el cliente existente. No crea registros bibliográficos, ejemplares, solicitudes de compra ni modifica datos en Koha.

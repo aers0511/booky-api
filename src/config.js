@@ -19,6 +19,11 @@ function getConfig() {
       model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta/models/'
     },
+    acquisitions: {
+      apiKey: process.env.ACQUISITIONS_API_KEY || '',
+      maxBooks: Math.min(Math.max(Number(process.env.ACQUISITIONS_MAX_BOOKS || 15), 1), 30),
+      maxResults: Math.min(Math.max(Number(process.env.ACQUISITIONS_MAX_RESULTS || 10), 1), 20)
+    },
     http: {
       allowedOrigins: csv(process.env.ALLOWED_ORIGINS, DEFAULT_ORIGINS),
       requestTimeoutMs: Number(process.env.REQUEST_TIMEOUT_MS || 27000)

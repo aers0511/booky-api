@@ -2,6 +2,9 @@
   "functions": {
     "api/booky.js": {
       "maxDuration": 30
+    },
+    "api/adquisiciones.js": {
+      "maxDuration": 30
     }
   }
 }

@@ -164,7 +164,7 @@ async function getItems(config, biblioId) {
   return asArray(data).map(normalizeItem);
 }
 
-async function searchBiblios(config, rawQuery) {
+async function searchBiblios(config, rawQuery, options = {}) {
   if (!isConfigured(config)) {
     throw new KohaError(
       'La conexión de consulta al catálogo aún no está configurada.',
@@ -210,6 +210,16 @@ async function searchBiblios(config, rawQuery) {
   const biblios = records.map(record => normalizeBiblio(record, config.baseUrl));
 
   // Recupera ejemplares con concurrencia limitada para no saturar Koha.
+  // El endpoint de adquisiciones puede solicitar primero solo bibliografía
+  // y recuperar ejemplares únicamente para coincidencias relevantes.
+  if (options.includeItems === false) {
+    return {
+      query,
+      totalReturned: biblios.length,
+      results: biblios
+    };
+  }
+
   const enriched = await Promise.all(biblios.map(async biblio => {
     try {
       const items = await getItems(config, biblio.biblioId);
@@ -233,5 +243,6 @@ async function searchBiblios(config, rawQuery) {
 module.exports = {
   KohaError,
   isConfigured,
-  searchBiblios
+  searchBiblios,
+  getItems
 };
