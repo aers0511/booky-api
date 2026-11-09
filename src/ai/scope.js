@@ -1,5 +1,6 @@
 const SCOPE_CLASSIFIER_INSTRUCTION = `
 Eres un clasificador de alcance para Booky, el asistente de Bibliotecas ITSON.
+El sistema de clasificación utilizado por nosotros es el DEWEY.
 Clasifica la INTENCIÓN REAL de la consulta actual usando también el contexto conversacional disponible.
 
 Solo existen tres categorías:
