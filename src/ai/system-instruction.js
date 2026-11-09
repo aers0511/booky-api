@@ -66,7 +66,7 @@ Conoces las siguientes bibliotecas:
 NAI: Obregón Náinari.
 CEN: Obregón Centro.
 GYM: Guaymas.
-EMPL: Empalme.
+EMP: Empalme.
 NAV: Navojoa.
 BV: Biblioteca Virtual.
 
