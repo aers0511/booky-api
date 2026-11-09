@@ -1868,7 +1868,7 @@
        1) CONFIGURACIÓN
     ========================================================= */
     const CONFIG = {
-      name: "Booky - Tu asistente de Bibliotecas ITSON",
+      name: "Booky",
       searchUrl: "https://sib.itson.edu.mx/cgi-bin/koha/opac-search.pl",
       libraryUrl: "https://sib.itson.edu.mx/",
       contactEmail: "serviciosbibliotecarios@itson.edu.mx",
@@ -2159,7 +2159,7 @@
             <li><b>Ventanilla Santander:</b> cuenta <b>0351</b>, referencia <b>0016994220503</b>, titular Instituto Tecnológico de Sonora.</li>
             <li><b>Transferencia BBVA:</b> cuenta <b>0155681928</b>, CLABE <b>012760001556819289</b>. En el motivo escribe <b>BIBLIOTECA + tu ID sin ceros iniciales</b>.</li>
           </ol>
-          <div class="sibot-note"><b>Transferencias y depósitos:</b> envía el comprobante a <a href="mailto:${CONFIG.paymentsEmail}">${CONFIG.paymentsEmail}</a> para solicitar la liberación manual.</div>`,
+          <div class="sibot-note"><b>Transferencias y depósitos:</b> antes de realizar el pago, confirma que la cuenta y referencia sigan vigentes. Después envía el comprobante a <a href="mailto:${CONFIG.paymentsEmail}">${CONFIG.paymentsEmail}</a> para solicitar la validación manual.</div>`,
         replies: [
           { text: "Carta de no adeudo", action: "intent", value: "no_debt" },
           { text: "Ver mis préstamos", action: "intent", value: "account" },
@@ -2223,14 +2223,16 @@
           "buscar por autor",
         ],
         answer: `
-          <div class="sibot-answer-title">Cómo encontrar un recurso</div>
+          <div class="sibot-answer-title">Encuentra materiales en el catálogo</div>
+          <p>Escribe lo que recuerdes del material. No necesitas conocer el título completo.</p>
           <ol class="sibot-steps">
-            <li>Escribe el título, autor, tema o palabra clave.</li>
-            <li>Abre el resultado y revisa su <b>disponibilidad</b>.</li>
-            <li>Para material físico, usa la <b>ubicación en estantería</b> indicada.</li>
-            <li>Para un recurso digital, utiliza el botón de acceso del registro.</li>
+            <li><b>Por título:</b> escribe el nombre del libro o algunas palabras del título.</li>
+            <li><b>Por autor:</b> prueba con apellidos y, si hace falta, agrega el nombre.</li>
+            <li><b>Por tema:</b> utiliza el concepto principal y prueba sinónimos si aparecen pocos resultados.</li>
+            <li><b>Revisa el registro:</b> distingue el título bibliográfico de sus ejemplares y consulta la biblioteca, disponibilidad y clasificación.</li>
+            <li><b>Si es digital:</b> abre el enlace de acceso indicado en el registro; algunos recursos requieren autenticación institucional.</li>
           </ol>
-          <div class="sibot-note">Puedes pedirme algo como: <b>“Busca libros electrónicos de inteligencia artificial”</b>.</div>`,
+          <div class="sibot-note">Ejemplo: <b>“Busca libros de administración de inventarios en Obregón Náinari”</b>. Si solo escribes “Obregón”, te preguntaré si te refieres a Náinari o Centro.</div>`,
         replies: [
           { text: "Ayúdame a buscar", action: "start_search" },
           {
@@ -2262,13 +2264,15 @@
           "ubicacion en estanteria",
         ],
         answer: `
-          <div class="sibot-answer-title">Cómo interpretar un resultado</div>
+          <div class="sibot-answer-title">Cómo leer la disponibilidad</div>
           <ul class="sibot-list">
-            <li><b>Disponible:</b> hay al menos un ejemplar que puedes localizar en la biblioteca indicada.</li>
-            <li><b>Prestado:</b> el ejemplar se encuentra actualmente en préstamo.</li>
-            <li><b>Disponible en línea:</b> abre el registro y utiliza el enlace de acceso.</li>
-            <li><b>Ubicación en estantería:</b> es la clasificación que debes seguir para encontrar el libro físico.</li>
-          </ul>`,
+            <li><b>Disponible:</b> Koha reporta uno o más ejemplares disponibles en esa biblioteca al momento de la consulta.</li>
+            <li><b>Prestado:</b> el ejemplar figura actualmente en préstamo; revisa el registro para conocer los datos que Koha publique.</li>
+            <li><b>Ejemplares:</b> un mismo título puede tener varias copias. El número de títulos encontrados no es el número de copias disponibles.</li>
+            <li><b>Clasificación y Cutter:</b> sirven para localizar el material en estantería. Sigue la ubicación indicada para la biblioteca correspondiente.</li>
+            <li><b>Disponible en línea:</b> utiliza el enlace digital del registro. El acceso puede depender de la autenticación institucional o de las condiciones del proveedor.</li>
+          </ul>
+          <div class="sibot-note">La disponibilidad cambia cuando se realizan préstamos o devoluciones. Confirma el estado en el catálogo antes de trasladarte.</div>`,
         replies: [
           { text: "Buscar un recurso", action: "start_search" },
           {
@@ -2370,8 +2374,9 @@
           "ver mi historial",
         ],
         answer: `
-          <div class="sibot-answer-title">Tu cuenta del SIB</div>
-          <p>Inicia sesión con tu <b>ID completo</b> y tu <b>contraseña institucional</b>. Desde ahí puedes consultar préstamos, fechas de devolución, renovaciones, reservas y adeudos.</p>`,
+          <div class="sibot-answer-title">Consulta tu cuenta del catálogo</div>
+          <p>Entra a <b>Mi cuenta</b> en el catálogo e inicia sesión con tu ID completo y contraseña institucional. Ahí puedes revisar los materiales que tienes en préstamo, sus fechas de devolución, las renovaciones disponibles, reservas y adeudos.</p>
+          <div class="sibot-note">Booky puede orientarte, pero no ve tus datos privados de cuenta. No escribas tu contraseña en este chat.</div>`,
         replies: [
           { text: "Consultar resumen aquí", action: "account_summary" },
           { text: "Abrir mi cuenta", action: "account" },
@@ -2826,27 +2831,24 @@
           "dime tus funciones",
         ],
         answer: `
-          <div class="sibot-answer-title">Puedo ayudarte de varias maneras</div>
+          <div class="sibot-answer-title">¿En qué te puedo orientar?</div>
+          <p>Booky reúne en un solo chat la orientación básica de Bibliotecas ITSON y el acceso al catálogo del SIB.</p>
           <ul class="sibot-list">
-            <li>Buscar libros, tesis y recursos digitales con lenguaje natural.</li>
-            <li>Filtrar por biblioteca, formato, autor, título, tema y disponibilidad.</li>
-            <li>Explicar ubicaciones en estantería, préstamos, renovaciones, multas, cubículos, horarios y acceso digital.</li>
-            <li>Recordar temporalmente tu nombre y el contexto de la conversación.</li>
-            <li>Conversar, calcular operaciones sencillas y responder conceptos generales.</li>
-            <li>Abrir el catálogo, Wikipedia, búsquedas web o Google Académico en una pestaña nueva.</li>
-          </ul>`,
+            <li><b>Encontrar materiales:</b> te orienta para localizar libros, tesis y recursos digitales por título, autor, tema o palabra clave.</li>
+            <li><b>Ubicar ejemplares:</b> revisa en qué biblioteca aparecen, cuántos están disponibles según Koha y qué clasificación debes buscar en estantería.</li>
+            <li><b>Usar tu cuenta:</b> consulta dónde revisar préstamos, fechas de devolución, renovaciones y adeudos.</li>
+            <li><b>Estudiar e investigar:</b> recibe orientación para localizar artículos, bases de datos, tesis y fuentes académicas, además de referencias y citas.</li>
+            <li><b>Conocer los servicios:</b> pregunta por horarios registrados, cubículos, asesorías, Biblioteca Virtual y canales de atención.</li>
+          </ul>
+          <div class="sibot-note">Los movimientos de cuenta, pagos y reservaciones se confirman en los sistemas o con el personal de la biblioteca; Booky no los realiza por ti.</div>`,
         replies: [
           {
-            text: "¿Cómo funcionas?",
-            action: "say",
-            value: "¿Cómo funcionas?",
+            text: "¿Cómo funciona el catálogo?",
+            action: "intent",
+            value: "catalog_search",
           },
           { text: "Buscar un libro", action: "start_search" },
-          {
-            text: "Dime algo curioso",
-            action: "say",
-            value: "Dime un dato curioso",
-          },
+          { text: "Consultar horarios", action: "intent", value: "hours" },
         ],
       },
       {
@@ -2863,9 +2865,10 @@
         ],
         phrases: ["como funcionas", "eres una ia", "como sabes las respuestas"],
         answer: `
-          <div class="sibot-answer-title">Así funciono</div>
-          <p>Interpreto lo que escribes mediante reglas de lenguaje, sinónimos, corrección de errores y contexto de la conversación. Para el catálogo consulto Koha directamente y convierto los resultados en tarjetas.</p>
-          <p>Cuando una pregunta no está en mi base, puedo consultar Wikipedia o, si la biblioteca lo tiene habilitado, una IA del servidor.</p>`,
+          <div class="sibot-answer-title">Cómo preparo una respuesta</div>
+          <p>Primero identifico qué necesitas: localizar un material, resolver una duda sobre un servicio o encontrar fuentes para una actividad académica.</p>
+          <p>Cuando solicitas una búsqueda, el catálogo Koha es la referencia para los registros y la disponibilidad que se muestran. Para orientación sobre servicios utilizo la información institucional configurada en Booky.</p>
+          <p>Si falta un dato importante —por ejemplo, si buscas disponibilidad en Náinari o Centro— te lo pregunto antes de continuar. Si no tengo información suficiente, te lo digo y te indico cómo confirmarla con Bibliotecas ITSON.</p>`,
         replies: [
           {
             text: "¿Qué puedes hacer?",
@@ -2899,9 +2902,10 @@
           "es seguro hablar contigo",
         ],
         answer: `
-          <div class="sibot-answer-title">Privacidad y memoria temporal</div>
-          <p>La conversación se conserva únicamente durante esta sesión del navegador para mantener el contexto. El historial caduca automáticamente.</p>
-          <p>Las búsquedas recientes guardan solo el término buscado en este navegador. Nunca compartas contraseñas, datos bancarios ni información sensible en el chat.</p>`,
+          <div class="sibot-answer-title">Qué información utiliza Booky</div>
+          <p>El chat conserva parte del contexto en la sesión del navegador para que no tengas que repetir tu pregunta. El historial de la interfaz tiene una duración configurada de 45 minutos.</p>
+          <p>Los mensajes que requieren una respuesta de IA se envían al servicio de IA configurado por Bibliotecas ITSON. No compartas contraseñas, códigos de acceso, datos bancarios ni información personal sensible.</p>
+          <p>Booky puede comprobar si tu sesión del catálogo está activa y llevarte a Mi cuenta, pero no muestra ni modifica tus préstamos, multas o datos personales dentro del chat. Para revisar esa información, entra directamente a tu cuenta del SIB.</p>`,
         replies: [
           {
             text: "Nueva conversación",
@@ -5130,13 +5134,12 @@
         : "";
 
       return `<article class="sibot-result-card sibot-koha-result" aria-label="Resultado ${index + 1}: ${escapeHTML(record.title)}">
-        <div class="sibot-koha-result-topline"><span>REGISTRO DE KOHA</span>${record.biblioId ? `<span>ID ${escapeHTML(record.biblioId)}</span>` : ""}</div>
         <div class="sibot-result-title">${escapeHTML(record.title || "Título no disponible")}</div>
         ${meta.length ? `<div class="sibot-result-meta">${meta.join("<br>")}</div>` : ""}
         ${record.isbn ? `<div class="sibot-koha-isbn">ISBN: ${escapeHTML(record.isbn)}</div>` : ""}
         <div class="sibot-result-badges"><span class="sibot-result-badge ${statusClass}">${escapeHTML(statusLabel)}</span>${totalBadge}</div>
-        ${items.length ? `<div class="sibot-koha-copies"><div class="sibot-koha-copies-title">Disponibilidad por biblioteca</div>${campusRows}</div>` : `<div class="sibot-koha-no-copies">${record.itemsUnavailable ? "Koha no permitió consultar los ejemplares de este registro." : "La API no devolvió información de ejemplares para este registro."}</div>`}
-        <div class="sibot-result-actions">${detailUrl ? `<button type="button" class="sibot-result-action primary" data-action="open_catalog_record" data-value="${escapeHTML(detailUrl)}">Ver ficha en catálogo</button>` : ""}</div>
+        ${items.length ? `<div class="sibot-koha-copies"><div class="sibot-koha-copies-title">Disponibilidad por biblioteca</div>${campusRows}</div>` : `<div class="sibot-koha-no-copies">${record.itemsUnavailable ? "El sistema no permitió consultar los ejemplares de este registro." : "No se encontró información de ejemplares para este registro."}</div>`}
+        <div class="sibot-result-actions">${detailUrl ? `<button type="button" class="sibot-result-action primary" data-action="open_catalog_record" data-value="${escapeHTML(detailUrl)}">Ver toda la información</button>` : ""}</div>
       </article>`;
     }
 
@@ -5164,9 +5167,9 @@
       const html = `<div class="sibot-ai-answer sibot-catalog-results">
         <div class="sibot-ai-kicker">CATÁLOGO BIBLIOTECAS ITSON</div>
         <div class="sibot-answer-title">Resultados para “${escapeHTML(ui.query || "") }”</div>
-        <div class="sibot-catalog-summary"><strong>${count}</strong><span>registro${count === 1 ? "" : "s"} encontrado${count === 1 ? "" : "s"}</span><i></i><span>${escapeHTML(campusLabel)}</span></div>
+        <div class="sibot-catalog-summary"><strong>${count}</strong><span>registro${count === 1 ? "" : "s"} bibliográfico${count === 1 ? "" : "s"}</span><i></i><span>${escapeHTML(campusLabel)}</span></div>
         <div class="sibot-results-list">${results.map(renderKohaResultCard).join("")}</div>
-        <div class="sibot-catalog-footnote">Información obtenida directamente de Koha. La disponibilidad puede cambiar.</div>
+        <div class="sibot-catalog-footnote">La disponibilidad puede cambiar.</div>
       </div>`;
       addMessage("bot", html, {
         trustedHTML: true,
@@ -5183,8 +5186,8 @@
       addMessage("bot", `<div class="sibot-ai-answer sibot-catalog-empty">
         <div class="sibot-ai-kicker">CATÁLOGO BIBLIOTECAS ITSON</div>
         <div class="sibot-answer-title">No encontré coincidencias</div>
-        <p>No encontré registros para <strong>“${escapeHTML(ui.query || "tu búsqueda") }”</strong> en ${escapeHTML(ui.campus || "los campus consultados")}.</p>
-        <div class="sibot-note">Prueba con menos palabras, el título exacto o el apellido del autor.</div>
+        <p>No apareció un registro para <strong>“${escapeHTML(ui.query || "tu búsqueda") }”</strong> en ${escapeHTML(ui.campus || "las bibliotecas consultadas")}.</p>
+        <div class="sibot-note">Prueba con una parte del título, el apellido del autor, un sinónimo del tema o el ISBN. También puedes ampliar la búsqueda a todas las bibliotecas.</div>
       </div>`, { trustedHTML: true, replies: [
         { text: "Buscar otro término", action: "start_search" },
         { text: "Consultar todos los campus", action: "catalog_query", value: `Busca libros sobre ${ui.query || ""} en todos los campus` },
@@ -5196,8 +5199,8 @@
       const isError = ui.type === "catalog_error";
       const title = isError ? "No pude consultar Koha" : "La búsqueda del catálogo no está activada";
       const message = isError
-        ? "No fue posible recuperar los registros en este momento. Inténtalo nuevamente más tarde."
-        : "La conexión de consulta todavía no está configurada en el servidor.";
+        ? "En este momento no pude recuperar los registros del catálogo. Puedes intentarlo de nuevo o abrir Koha para continuar la búsqueda."
+        : "La consulta al catálogo todavía no está habilitada en el servidor. El personal responsable debe revisar la conexión de Booky con Koha.";
       addMessage("bot", `<div class="sibot-ai-answer sibot-catalog-empty">
         <div class="sibot-ai-kicker">CATÁLOGO BIBLIOTECAS ITSON</div>
         <div class="sibot-answer-title">${title}</div><p>${message}</p>
@@ -5263,7 +5266,6 @@
         }
 
         return botSay(
-          `<div class="sibot-ai-answer"><div class="sibot-ai-kicker">ASISTENTE BIBLIOTECARIO</div>${plainTextToHTML(response.answer)}</div>`,
           [
             { text: "Buscar en catálogo", action: "start_search" },
             { text: "Contactar biblioteca", action: "contact" },
@@ -5511,7 +5513,7 @@
 
       if (looksLikeGreeting(text) && normalized.split(" ").length <= 2) {
         return botSay(
-          `<div class="sibot-answer-title">¡Hola! 👋</div><p>Cuéntame qué necesitas. Puedes preguntarme con tus propias palabras.</p>`,
+          `<div class="sibot-answer-title">¡Hola! Soy Booky.</div><p>¿Qué necesitas resolver en Bibliotecas ITSON? Puedo ayudarte a localizar un material, revisar cómo usar un servicio o encontrar fuentes académicas.</p>`,
           welcomeReplies(),
           { trustedHTML: true },
         );
@@ -5582,8 +5584,8 @@
 
       if (await handleSearchFollowUp(text)) return;
 
-      // Preguntas de definición ("qué es", "qué significa") van a Wikipedia,
-      // pero después de la base de conocimiento para que "qué es un cubículo" use tus respuestas.
+      // Las consultas fuera del ámbito bibliotecario se validan en el backend.
+      // La navegación externa solo debe utilizarse para recursos académicos pertinentes.
       const ranked = rankKnowledge(text);
       const best = ranked[0];
       const second = ranked[1];
@@ -5674,7 +5676,7 @@
         };
         await handleFallback(clean, ranked, context);
       } finally {
-        suggestionsBar.textContent = "Pregúntame sobre Bibliotecas ITSON, el catálogo o recursos académicos.";
+        suggestionsBar.textContent = "Catálogo, préstamos, horarios, cubículos y recursos académicos.";
       }
     }
 
@@ -5683,29 +5685,13 @@
     ========================================================= */
     function welcomeReplies() {
       const replies = [
-        { text: "Buscar en el catálogo", action: "start_search" },
+        { text: "Buscar libros o tesis", action: "start_search" },
         { text: "Consultar mi cuenta", action: "account_summary" },
-        {
-          text: "Préstamos y renovaciones",
-          action: "category",
-          value: "Préstamos",
-        },
-        {
-          text: "Recursos digitales",
-          action: "intent",
-          value: "digital_resources",
-        },
-        {
-          text: "Reservar cubículo",
-          action: "say",
-          value: "Quiero reservar un cubículo",
-        },
-        { text: "Horarios", action: "intent", value: "hours" },
-        {
-          text: "Búsquedas recientes",
-          action: "say",
-          value: "Búsquedas recientes",
-        },
+        { text: "Préstamos y renovaciones", action: "category", value: "Préstamos" },
+        { text: "Libros y bases de datos digitales", action: "intent", value: "digital_resources" },
+        { text: "Cubículos de estudio", action: "intent", value: "cubicles" },
+        { text: "Horarios por biblioteca", action: "intent", value: "hours" },
+        { text: "Asesorías y contacto", action: "intent", value: "contact" },
       ];
       return replies;
     }
@@ -5713,9 +5699,10 @@
     function renderWelcome() {
       addMessage(
         "bot",
-        `<div class="sibot-answer-title">${getTimeGreeting()} 👋 Soy ${escapeHTML(CONFIG.name)}</div>
-         <p>Puedo buscar libros, tesis y recursos digitales, resolver dudas de la biblioteca e informarte sobre horarios y cubículos.</p>
-         <div class="sibot-note">Prueba: <b>“Busca tesis sobre educación en Náinari”</b> o <b>“¿A qué hora abre Centro el lunes?”</b>.</div>`,
+        `<div class="sibot-answer-title">${getTimeGreeting()} Soy Booky.</div>
+         <p>Te ayudo a encontrar materiales en el catálogo de Bibliotecas ITSON y a resolver dudas sobre sus servicios.</p>
+         <p>Puedes escribir una pregunta completa, como se la harías al personal de biblioteca. Si falta un dato importante, te preguntaré antes de continuar.</p>
+         <div class="sibot-note"><b>Prueba:</b> “¿Hay libros de administración de inventarios en Náinari?” · “Necesito artículos científicos sobre inteligencia artificial” · “¿Cómo renuevo un préstamo?”.</div>`,
         { trustedHTML: true, replies: welcomeReplies() },
       );
     }
@@ -5747,9 +5734,9 @@
 
     function askSearchTerm() {
       state.conversationMode = "search_term";
-      suggestionsBar.textContent = "Escribe un tema, título o autor.";
+      suggestionsBar.textContent = "Puedes escribir un título, autor, tema o ISBN.";
       botSay(
-        `<div class="sibot-answer-title">¿Qué deseas encontrar?</div><p>Escribe un tema, título o autor.</p>`,
+        `<div class="sibot-answer-title">¿Qué material estás buscando?</div><p>Escribe el título, el apellido del autor, un tema o el ISBN. No necesitas conocer todos los datos.</p>`,
         [
           {
             text: "Inteligencia artificial",
@@ -6127,8 +6114,8 @@
       <section id="sibot-window" role="dialog" aria-modal="false" aria-hidden="true" aria-labelledby="sibot-title">
         <header id="sibot-header">
           <div class="sibot-brand">
-            <strong id="sibot-title">Booky - IA</strong>
-            <span>Tu Bibliotecario Virtual de Bibliotecas ITSON</span>
+            <strong id="sibot-title">Booky</strong>
+            <span>Orientación y catálogo · Bibliotecas ITSON</span>
           </div>
           <div class="sibot-header-actions">
             <button id="sibot-clear" class="sibot-icon-button" type="button" title="Nueva conversación" aria-label="Nueva conversación">↻</button>
@@ -6138,11 +6125,11 @@
           </div>
         </header>
         <main id="sibot-body" role="log" aria-live="polite"></main>
-        <div id="sibot-suggestions-bar">Pregúntame sobre Bibliotecas ITSON, el catálogo o recursos académicos.</div>
+        <div id="sibot-suggestions-bar">Catálogo, préstamos, horarios, cubículos y recursos académicos.</div>
         <div id="sibot-autocomplete" class="sibot-autocomplete" role="listbox" hidden></div>
         <form id="sibot-input-area">
-          <label for="sibot-input" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Escribe tu mensaje</label>
-          <textarea id="sibot-input" rows="1" maxlength="600" placeholder="Ej. Busca libros electrónicos de psicología"></textarea>
+          <label for="sibot-input" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Escribe tu consulta para Bibliotecas ITSON</label>
+          <textarea id="sibot-input" rows="1" maxlength="600" placeholder="Título, autor, tema o duda sobre un servicio"></textarea>
           <button id="sibot-send" type="submit" aria-label="Enviar mensaje" disabled>
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m21 3-8.4 18-2.1-7.5L3 10.4 21 3Z" stroke-width="1.8" stroke-linejoin="round"/><path d="m10.5 13.5 4.6-4.6" stroke-width="1.8" stroke-linecap="round"/></svg>
           </button>
@@ -6478,6 +6465,8 @@
     if (/^#booky(?:-ia)?$/i.test(window.location.hash)) openChat();
   })();
 </script>
+
+
 <script>
   (function () {
     "use strict";

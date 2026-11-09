@@ -5,7 +5,7 @@ const { noResultsAnswer, unavailableAnswer } = require('./prompt');
 const CATALOG_URL = 'https://sib.itson.edu.mx/cgi-bin/koha/opac-search.pl';
 
 function campusClarificationAnswer(query) {
-  return `Para revisar la disponibilidad de “${query}”, necesito saberlo: ¿en qué campus quieres consultar?`;
+  return `Encontré el tema de tu búsqueda: “${query}”. Para revisar dónde hay ejemplares, ¿en qué campus quieres consultar? Puedes elegir Náinari, Centro, Guaymas, Empalme, Navojoa o todos los campus.`;
 }
 
 function filterByCampus(search, campus) {
@@ -22,7 +22,7 @@ function filterByCampus(search, campus) {
 }
 
 function noCampusResultsAnswer(query, campus) {
-  return `Encontré registros relacionados con “${query}”, pero Koha no devolvió ejemplares asociados a ${campus.label}. Puedes consultar todos los campus o abrir el catálogo completo.`;
+  return `El catálogo sí devolvió registros relacionados con “${query}”, pero no aparecen ejemplares asociados a ${campus.label} en esta consulta. Puedes revisar todas las bibliotecas para localizar otras copias.`;
 }
 
 const CAMPUS_OPTIONS = CAMPUSES
@@ -83,7 +83,7 @@ const catalogFeature = {
       }
 
       const campusLabel = intent.campus?.label || 'Todos los campus';
-      const answer = `Encontré ${search.totalReturned} registro${search.totalReturned === 1 ? '' : 's'} para “${intent.query}” en ${campusLabel}. La disponibilidad corresponde a los datos consultados en Koha.`;
+      const answer = `La búsqueda de “${intent.query}” devolvió ${search.totalReturned} registro${search.totalReturned === 1 ? '' : 's'} bibliográfico${search.totalReturned === 1 ? '' : 's'} en ${campusLabel}. Revisa las tarjetas para ver los ejemplares y su disponibilidad por biblioteca; los datos corresponden a la consulta realizada en Koha.`;
 
       return {
         handled: true,

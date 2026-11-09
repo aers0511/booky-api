@@ -20,7 +20,7 @@ o
 `;
 
 const OUT_OF_SCOPE_ANSWER =
-  '¡Con gusto te ayudaría! Sin embargo, soy Booky, el asistente de Bibliotecas ITSON, y mi función se limita a orientar sobre servicios bibliotecarios, catálogo, recursos académicos y apoyo a la investigación. Si lo deseas, puedo ayudarte a encontrar libros o fuentes académicas relacionadas con ese tema.';
+  'Ese tema queda fuera de lo que atiendo desde Bibliotecas ITSON. Mi función es ayudarte con el catálogo, préstamos, horarios, cubículos, Biblioteca Virtual y búsqueda de información académica. Si te sirve, puedo ayudarte a localizar libros, artículos o tesis sobre ese tema.';
 
 const SAFETY_SCOPE_ANSWER =
   'Lamento que estés pasando por una situación así. Booky está especializado en servicios bibliotecarios y no puede atender emergencias. Si existe peligro inmediato, comunícate con los servicios de emergencia de tu localidad y busca ahora mismo el apoyo de una persona de confianza.';

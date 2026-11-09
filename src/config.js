@@ -32,7 +32,7 @@ function getConfig() {
       password: process.env.KOHA_API_PASSWORD || '',
       timeoutMs: Number(process.env.KOHA_TIMEOUT_MS || 5000),
       maxResults: Math.min(Math.max(Number(process.env.KOHA_MAX_RESULTS || 5), 1), 10),
-      maxItemsPerBiblio: Math.min(Math.max(Number(process.env.KOHA_MAX_ITEMS || 100), 1), 100)
+      maxItemsPerBiblio: Math.min(Math.max(Number(process.env.KOHA_MAX_ITEMS || 40), 1), 100)
     }
   };
 }
