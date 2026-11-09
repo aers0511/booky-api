@@ -85,7 +85,7 @@ module.exports = async function handler(req, res) {
       if (catalog.status === 'exact_match') {
         warnings.push('Se encontró una coincidencia bibliográfica fuerte en el catálogo. Puedes solicitar ejemplares adicionales, pero se recomienda justificar la necesidad.');
       } else if (catalog.status === 'possible_match') {
-        warnings.push('Se encontraron registros posiblemente relacionados. Revisa los datos antes de continuar.');
+        warnings.push('Se encontraron registros con información bibliográfica similar. Valora cuidadosamente si cada resultado corresponde realmente al libro que estás solicitando. Verifica especialmente el autor, la editorial, la edición, el año y el ISBN; no asumas que se trata del mismo libro únicamente porque el título coincida.');
       } else if (catalog.status === 'not_found') {
         warnings.push('No se encontraron coincidencias con los criterios consultados. Esto no sustituye la revisión bibliotecaria.');
       } else {
