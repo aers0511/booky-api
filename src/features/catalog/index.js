@@ -1,33 +1,15 @@
-const { detectCatalogIntent } = require('./intent');
+const { detectCatalogIntent, CAMPUSES } = require('./intent');
 const { searchBiblios, isConfigured, KohaError } = require('../../integrations/koha/client');
-const {
-  buildCatalogContext,
-  CATALOG_SYSTEM_ADDENDUM,
-  noResultsAnswer,
-  unavailableAnswer
-} = require('./prompt');
+const { noResultsAnswer, unavailableAnswer } = require('./prompt');
 
 const CATALOG_URL = 'https://sib.itson.edu.mx/cgi-bin/koha/opac-search.pl';
 
 function campusClarificationAnswer(query) {
-  return [
-    `¡Claro! Para revisar la disponibilidad de **${query}**, ¿en qué campus quieres consultar?`,
-    '',
-    'Responde con el número o el nombre del campus:',
-    '1. Obregón Náinari',
-    '2. Obregón Centro',
-    '3. Guaymas',
-    '4. Empalme',
-    '5. Navojoa',
-    '6. Todos los campus',
-    '',
-    'También puedes escribir el campus directamente.'
-  ].join('\n');
+  return `Para revisar la disponibilidad de “${query}”, necesito saberlo: ¿en qué campus quieres consultar?`;
 }
 
 function filterByCampus(search, campus) {
-  if (!campus) return search;
-  if (campus.all) return { ...search, campus };
+  if (!campus || campus.all) return { ...search, campus };
 
   const results = search.results
     .map(record => ({
@@ -40,8 +22,13 @@ function filterByCampus(search, campus) {
 }
 
 function noCampusResultsAnswer(query, campus) {
-  return `Encontré registros relacionados con **${query}**, pero Koha no devolvió ejemplares asociados a **${campus.label}**. Esto no significa necesariamente que el libro no exista en el acervo; puedes consultar [el catálogo completo](${CATALOG_URL}) o pedirme que revise todos los campus.`;
+  return `Encontré registros relacionados con “${query}”, pero Koha no devolvió ejemplares asociados a ${campus.label}. Puedes consultar todos los campus o abrir el catálogo completo.`;
 }
+
+const CAMPUS_OPTIONS = CAMPUSES
+  .filter(campus => campus.code !== 'BV')
+  .map(campus => ({ code: campus.code, label: campus.label }));
+CAMPUS_OPTIONS.push({ code: 'ALL', label: 'Todos los campus' });
 
 const catalogFeature = {
   id: 'catalog-search',
@@ -52,8 +39,8 @@ const catalogFeature = {
     if (!isConfigured(config.koha)) {
       return {
         handled: true,
-        answer: 'La búsqueda directa en el catálogo todavía no está configurada. Puedes consultar el catálogo de Bibliotecas ITSON aquí: ' + CATALOG_URL,
-        context: null
+        answer: 'La búsqueda directa en el catálogo todavía no está configurada. Puedes consultar el catálogo de Bibliotecas ITSON directamente.',
+        ui: { type: 'catalog_unavailable', catalogUrl: CATALOG_URL }
       };
     }
 
@@ -61,37 +48,54 @@ const catalogFeature = {
       return {
         handled: true,
         answer: campusClarificationAnswer(intent.query),
-        context: null,
+        ui: {
+          type: 'catalog_clarification',
+          query: intent.query,
+          campuses: CAMPUS_OPTIONS,
+          catalogUrl: CATALOG_URL
+        },
         clarification: true
       };
     }
 
     try {
       let search = await searchBiblios(config.koha, intent.query);
-      if (!search.results.length) {
-        return {
-          handled: true,
-          answer: noResultsAnswer(intent.query, CATALOG_URL),
-          context: null
-        };
-      }
 
       if (intent.campus && !intent.campus.all) {
         search = filterByCampus(search, intent.campus);
-        if (!search.results.length) {
-          return {
-            handled: true,
-            answer: noCampusResultsAnswer(intent.query, intent.campus),
-            context: null
-          };
-        }
       }
 
+      if (!search.results.length) {
+        const answer = intent.campus && !intent.campus.all
+          ? noCampusResultsAnswer(intent.query, intent.campus)
+          : noResultsAnswer(intent.query, CATALOG_URL);
+
+        return {
+          handled: true,
+          answer,
+          ui: {
+            type: 'catalog_empty',
+            query: intent.query,
+            campus: intent.campus?.label || 'Todos los campus',
+            catalogUrl: CATALOG_URL
+          }
+        };
+      }
+
+      const campusLabel = intent.campus?.label || 'Todos los campus';
+      const answer = `Encontré ${search.totalReturned} registro${search.totalReturned === 1 ? '' : 's'} para “${intent.query}” en ${campusLabel}. La disponibilidad corresponde a los datos consultados en Koha.`;
+
       return {
-        handled: false,
-        context: buildCatalogContext(search),
-        systemAddendum: CATALOG_SYSTEM_ADDENDUM,
-        search
+        handled: true,
+        answer,
+        ui: {
+          type: 'catalog_results',
+          query: intent.query,
+          campus: campusLabel,
+          totalReturned: search.totalReturned,
+          results: search.results,
+          catalogUrl: CATALOG_URL
+        }
       };
     } catch (error) {
       console.error('Booky Koha catalog error:', {
@@ -103,7 +107,11 @@ const catalogFeature = {
       return {
         handled: true,
         answer: unavailableAnswer(CATALOG_URL),
-        context: null,
+        ui: {
+          type: 'catalog_error',
+          catalogUrl: CATALOG_URL,
+          message: error instanceof KohaError ? error.message : ''
+        },
         catalogError: error instanceof KohaError ? error.code : 'unknown'
       };
     }

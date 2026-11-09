@@ -80,6 +80,9 @@ function removeCampusFromQuery(query, campus) {
     }
   }
   result = result
+    .replace(/\b(?:en\s+)?todos?\s+(?:los\s+)?campus(?:es)?\b/ig, ' ')
+    .replace(/\b(?:en\s+)?todas?\s+las\s+sedes\b/ig, ' ')
+    .replace(/\b(?:en\s+)?cualquier\s+campus\b/ig, ' ')
     .replace(/\s+\b(?:en|del|de|campus|sede)\s*$/i, '')
     .replace(/\s+/g, ' ');
   return cleanQuery(result);

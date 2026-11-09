@@ -71,7 +71,8 @@ module.exports = async function handler(req, res) {
     if (featureResult?.handled) {
       return send(res, 200, {
         answer: featureResult.answer,
-        feature: featureResult.feature
+        feature: featureResult.feature,
+        ...(featureResult.ui ? { ui: featureResult.ui } : {})
       });
     }
 

@@ -59,7 +59,7 @@ Configura estas variables en Project → Settings → Environment Variables:
 - `KOHA_API_PATH`: `/api/v1`.
 - `KOHA_API_USERNAME`: usuario técnico de Koha.
 - `KOHA_API_PASSWORD`: contraseña de ese usuario.
-- `KOHA_TIMEOUT_MS`: tiempo máximo por consulta, por defecto 7000 ms.
+- `KOHA_TIMEOUT_MS`: tiempo máximo por consulta, por defecto 5000 ms.
 - `KOHA_MAX_RESULTS`: máximo de registros, por defecto 5.
 - `KOHA_MAX_ITEMS`: máximo de ejemplares por registro, por defecto 40.
 
@@ -84,7 +84,7 @@ El endpoint principal se mantiene igual:
 
 `https://TU-PROYECTO.vercel.app/api/booky`
 
-El frontend no necesita cambiar la URL ni el formato básico. Sigue enviando:
+El frontend incluido en el paquete ya interpreta las respuestas estructuradas (`ui`) de catálogo. Reemplaza el fragmento OPACcredits por el archivo `booky-opaccredits-bibliotecas-itson.html` incluido en el paquete. Conserva la misma URL del endpoint. El frontend sigue enviando:
 
 ```json
 {
@@ -103,7 +103,7 @@ Prueba desde el chat de Booky con consultas como:
 - `Encuentra materiales del autor ...`
 - `Busca este ISBN: ...`
 
-Si Booky pregunta el campus, responde con `1` a `6` o escribe el nombre. La opción 6 consulta todos los campus. Para omitir esta aclaración y buscar en todas las sedes por defecto, configura `KOHA_ASK_CAMPUS=false`.
+Si Booky pregunta el campus, selecciona una de las tarjetas de campus o escribe el nombre. La opción “Todos los campus” consulta todas las sedes. Para omitir esta aclaración y buscar en todas las sedes por defecto, configura `KOHA_ASK_CAMPUS=false`.
 
 Verifica que el título y el enlace correspondan a registros reales en Koha y que la disponibilidad coincida con los ejemplares actuales.
 
@@ -124,4 +124,5 @@ Ejemplos futuros: consulta de recursos digitales, ayuda para APA, información d
 - No requiere dependencias npm adicionales.
 - CORS limita los orígenes del navegador, pero CORS por sí solo no es un sistema de autenticación.
 - La búsqueda de Koha usa el filtro JSON del parámetro `q` documentado por Koha REST API. Los campos bibliográficos pueden variar por versión/configuración; si la instalación devuelve `invalid_query`, hay que ajustar los campos de búsqueda a la respuesta real de ITSON.
+- Las respuestas de catálogo se renderizan con el mismo sistema de tarjetas de Booky tanto si el usuario inicia la búsqueda escribiendo como si la inicia desde el botón “Buscar en catálogo”. El botón de búsqueda ya no utiliza el extractor HTML local de Koha para mostrar resultados.
 - La integración no se ha probado contra el servidor de producción de ITSON porque no se proporcionaron credenciales ni se realizó una consulta autenticada.

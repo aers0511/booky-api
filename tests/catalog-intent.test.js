@@ -36,7 +36,7 @@ test('reconoce todos los campus', () => {
 test('recupera la búsqueda pendiente al responder con un número', () => {
   const history = [
     { role: 'user', parts: [{ text: 'Busca libros sobre administración de inventarios' }] },
-    { role: 'model', parts: [{ text: '¿En qué campus quieres consultar?' }] },
+    { role: 'model', parts: [{ text: 'Para revisar la disponibilidad de “administración de inventarios”, necesito saberlo: ¿en qué campus quieres consultar?' }] },
     { role: 'user', parts: [{ text: '1' }] }
   ];
   const result = detectCampusFollowUp(history, '1');
@@ -67,4 +67,25 @@ test('no interpreta Guaymas como campus cuando forma parte del tema sin preposic
   const result = detectCatalogSearch('Busca libros sobre Guaymas');
   assert.equal(result.needsCampus, true);
   assert.equal(result.query, 'Guaymas');
+});
+
+
+test('quita la selección de todos los campus del término de búsqueda', () => {
+  const result = detectCatalogSearch('Busca libros sobre administración de inventarios en todos los campus');
+  assert.equal(result.query, 'administración de inventarios');
+  assert.equal(result.campus.all, true);
+  assert.equal(result.needsCampus, false);
+});
+
+test('reanuda la búsqueda cuando el campus se elige desde la tarjeta conversacional', () => {
+  const query = 'Busca libros sobre administración de inventarios';
+  const history = [
+    { role: 'user', parts: [{ text: query }] },
+    { role: 'model', parts: [{ text: 'Para revisar la disponibilidad de “administración de inventarios”, necesito saberlo: ¿en qué campus quieres consultar?' }] },
+    { role: 'user', parts: [{ text: 'Obregón Náinari' }] }
+  ];
+  const result = detectCampusFollowUp(history, 'Obregón Náinari');
+  assert.equal(result.query, 'administración de inventarios');
+  assert.equal(result.campus.code, 'NAI');
+  assert.equal(result.needsCampus, false);
 });
