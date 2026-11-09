@@ -34,7 +34,9 @@ Cuando un usuario pide encontrar libros, títulos, materiales, tesis o artículo
 2. Detecta que se trata de una búsqueda en el catálogo.
 3. Consulta `GET /api/v1/biblios` en Koha.
 4. Consulta `GET /api/v1/biblios/{biblio_id}/items` para recuperar ejemplares.
-5. Entrega a Gemini los resultados reales para redactar una respuesta clara.
+5. Si no se especifica campus, pregunta cuál consultar y conserva la búsqueda pendiente en el historial de conversación.
+6. Filtra los ejemplares por sucursal cuando el usuario elige un campus.
+7. Entrega a Gemini los resultados reales para redactar una respuesta clara.
 
 Si no hay resultados, no inventa títulos. Si Koha no está configurado o no responde, Booky informa que no pudo consultar el catálogo y muestra el enlace público.
 
@@ -52,6 +54,7 @@ Configura estas variables en Project → Settings → Environment Variables:
 ### Koha
 
 - `KOHA_ENABLED`: cambia a `true` cuando hayas probado las credenciales.
+- `KOHA_ASK_CAMPUS`: `true` para preguntar el campus cuando no se indique; `false` para consultar todos los campus por defecto.
 - `KOHA_BASE_URL`: `https://sib.itson.edu.mx`.
 - `KOHA_API_PATH`: `/api/v1`.
 - `KOHA_API_USERNAME`: usuario técnico de Koha.
@@ -99,6 +102,8 @@ Prueba desde el chat de Booky con consultas como:
 - `¿Tienen libros de cálculo?`
 - `Encuentra materiales del autor ...`
 - `Busca este ISBN: ...`
+
+Si Booky pregunta el campus, responde con `1` a `6` o escribe el nombre. La opción 6 consulta todos los campus. Para omitir esta aclaración y buscar en todas las sedes por defecto, configura `KOHA_ASK_CAMPUS=false`.
 
 Verifica que el título y el enlace correspondan a registros reales en Koha y que la disponibilidad coincida con los ejemplares actuales.
 
