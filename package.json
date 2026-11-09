@@ -1,7 +1,12 @@
 {
   "name": "booky-api",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "API serverless de Booky para Bibliotecas ITSON con Google Gemini",
-  "engines": { "node": ">=20.x" }
+  "description": "Backend modular de Booky para Bibliotecas ITSON: Gemini + Koha catálogo de solo lectura",
+  "engines": {
+    "node": ">=20.x"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
 }
