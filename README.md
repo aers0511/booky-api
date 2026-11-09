@@ -61,7 +61,7 @@ Configura estas variables en Project → Settings → Environment Variables:
 - `KOHA_API_PASSWORD`: contraseña de ese usuario.
 - `KOHA_TIMEOUT_MS`: tiempo máximo por consulta, por defecto 5000 ms.
 - `KOHA_MAX_RESULTS`: máximo de registros, por defecto 5.
-- `KOHA_MAX_ITEMS`: máximo de ejemplares por registro, por defecto 40.
+- `KOHA_MAX_ITEMS`: máximo de ejemplares por registro, por defecto 100 (máximo permitido por esta integración).
 
 No pongas las credenciales en el HTML, Git, README ni mensajes enviados al navegador. Guárdalas únicamente como variables de entorno en Vercel.
 
@@ -126,3 +126,8 @@ Ejemplos futuros: consulta de recursos digitales, ayuda para APA, información d
 - La búsqueda de Koha usa el filtro JSON del parámetro `q` documentado por Koha REST API. Los campos bibliográficos pueden variar por versión/configuración; si la instalación devuelve `invalid_query`, hay que ajustar los campos de búsqueda a la respuesta real de ITSON.
 - Las respuestas de catálogo se renderizan con el mismo sistema de tarjetas de Booky tanto si el usuario inicia la búsqueda escribiendo como si la inicia desde el botón “Buscar en catálogo”. El botón de búsqueda ya no utiliza el extractor HTML local de Koha para mostrar resultados.
 - La integración no se ha probado contra el servidor de producción de ITSON porque no se proporcionaron credenciales ni se realizó una consulta autenticada.
+
+
+## Presentación agrupada de ejemplares en OPACcredits
+
+Se añadió agrupación visual por campus, ubicación y clasificación/Cutter. Cada grupo muestra la cantidad disponible y el total de ejemplares, evitando repetir una fila por cada copia. El conteo se calcula con los ejemplares que devuelve Koha. El límite predeterminado por registro se elevó a 100 ejemplares (`KOHA_MAX_ITEMS=100`) para reducir el riesgo de conteos incompletos.
