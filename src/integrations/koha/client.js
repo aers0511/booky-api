@@ -241,9 +241,65 @@ async function searchBiblios(config, rawQuery, options = {}) {
   };
 }
 
+function normalizePatron(record) {
+  const borrowernumber = record?.borrowernumber ?? record?.patron_id ?? record?.id;
+  const cardnumber = firstText(record?.cardnumber);
+  const firstname = firstText(record?.firstname);
+  const surname = firstText(record?.surname);
+  const branchcode = firstText(record?.branchcode);
+  const categoryId = firstText(record?.category_id);
+
+  return {
+    borrowernumber: borrowernumber ?? null,
+    cardnumber: cardnumber || null,
+    firstname: firstname || null,
+    surname: surname || null,
+    full_name: [firstname, surname].filter(Boolean).join(' ') || 'Nombre no disponible',
+    branchcode: branchcode || null,
+    category_id: categoryId || null
+  };
+}
+
+async function searchPatronByCardnumber(config, rawCardnumber) {
+  if (!isConfigured(config)) {
+    throw new KohaError(
+      'La búsqueda de usuarios de Koha no está habilitada o no tiene credenciales propias.',
+      503,
+      'koha_patrons_not_configured'
+    );
+  }
+
+  const cardnumber = String(rawCardnumber || '').trim();
+  if (!cardnumber || cardnumber.length > 64 || /[\u0000-\u001F\u007F]/.test(cardnumber)) {
+    throw new KohaError(
+      'Proporciona un cardnumber válido (máximo 64 caracteres).',
+      400,
+      'invalid_cardnumber'
+    );
+  }
+
+  const data = await kohaGet(config, '/patrons', {
+    cardnumber,
+    _match: 'exact',
+    _per_page: 5,
+    _page: 1
+  });
+  const records = asArray(data)
+    .filter(record => String(record?.cardnumber || '').trim().toLowerCase() === cardnumber.toLowerCase());
+
+  return {
+    query: { cardnumber },
+    found: records.length > 0,
+    total: records.length,
+    results: records.slice(0, 5).map(normalizePatron)
+  };
+}
+
 module.exports = {
   KohaError,
   isConfigured,
   searchBiblios,
-  getItems
+  getItems,
+  searchPatronByCardnumber,
+  normalizePatron
 };

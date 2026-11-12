@@ -76,3 +76,29 @@ test('consolida ejemplares por biblioteca sin perder el conteo', () => {
   assert.equal(summary.find(item => item.branch_code === 'GYM').quantity, 2);
   assert.equal(summary.find(item => item.branch_code === 'NAV').quantity, 1);
 });
+
+const { normalizePatron } = require('../src/integrations/koha/client');
+
+test('normaliza usuario Koha sin exponer datos personales adicionales', () => {
+  const patron = normalizePatron({
+    patron_id: 456,
+    cardnumber: '12345',
+    firstname: 'Ana',
+    surname: 'Pérez',
+    branchcode: 'NAI',
+    category_id: 'ST',
+    email: 'ana@example.com',
+    phone: '6440000000'
+  });
+  assert.deepEqual(patron, {
+    borrowernumber: 456,
+    cardnumber: '12345',
+    firstname: 'Ana',
+    surname: 'Pérez',
+    full_name: 'Ana Pérez',
+    branchcode: 'NAI',
+    category_id: 'ST'
+  });
+  assert.equal('email' in patron, false);
+  assert.equal('phone' in patron, false);
+});

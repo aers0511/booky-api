@@ -24,6 +24,14 @@ function getConfig() {
       maxBooks: Math.min(Math.max(Number(process.env.ACQUISITIONS_MAX_BOOKS || 15), 1), 30),
       maxResults: Math.min(Math.max(Number(process.env.ACQUISITIONS_MAX_RESULTS || 10), 1), 20)
     },
+    kohaPatrons: {
+      enabled: String(process.env.KOHA_PATRONS_ENABLED || 'false').toLowerCase() === 'true',
+      baseUrl: kohaBase,
+      apiPath: (process.env.KOHA_API_PATH || '/api/v1').replace(/^\/?/, '/').replace(/\/+$/, ''),
+      username: process.env.KOHA_PATRONS_API_USERNAME || '',
+      password: process.env.KOHA_PATRONS_API_PASSWORD || '',
+      timeoutMs: Number(process.env.KOHA_TIMEOUT_MS || 7000)
+    },
     http: {
       allowedOrigins: csv(process.env.ALLOWED_ORIGINS, DEFAULT_ORIGINS),
       requestTimeoutMs: Number(process.env.REQUEST_TIMEOUT_MS || 27000)

@@ -230,3 +230,146 @@ El endpoint solo consulta Koha mediante las operaciones GET ya utilizadas por el
 - Los ejemplares se agrupan en `holdings` por biblioteca, ubicación, clasificación y estado. El campo `quantity` indica cuántos ejemplares hay en ese grupo y `total_items` indica el total recuperado para el registro.
 - `validation.matches_found` representa el total de coincidencias encontradas por la búsqueda; `validation.matches_returned` indica cuántas se incluyen en la respuesta (máximo cinco).
 - Se reconoce `EMP` como código alternativo de Empalme, además de `EMPL`.
+
+
+## API de adquisiciones: uso desde el frontend
+
+El módulo expone dos operaciones. Ambas requieren la misma clave `ACQUISITIONS_API_KEY`, enviada en el encabezado `x-api-key`.
+
+### 1. Buscar usuario por número de tarjeta
+
+`GET /api/adquisiciones/usuarios?cardnumber=NUMERO_TARJETA`
+
+Ejemplo de respuesta cuando existe:
+
+```json
+{
+  "success": true,
+  "endpoint": "adquisiciones.usuarios",
+  "query": { "cardnumber": "12345" },
+  "found": true,
+  "total": 1,
+  "results": [
+    {
+      "borrowernumber": 456,
+      "cardnumber": "12345",
+      "firstname": "Nombre",
+      "surname": "Apellidos",
+      "full_name": "Nombre Apellidos",
+      "branchcode": "NAI",
+      "category_id": "ST"
+    }
+  ]
+}
+```
+
+Si no existe, responde `200` con `found: false`, `total: 0` y `results: []`. Los errores de validación, autenticación o Koha se devuelven con su código HTTP y un objeto `error`/`code`.
+
+La consulta utiliza el parámetro `cardnumber` y `_match=exact` de Koha REST API. La cuenta de Koha debe tener `borrowers → list_borrowers`. Para mantener separadas las funciones, configura una cuenta técnica exclusiva para esta búsqueda; no agregues permisos de usuarios a la cuenta de catálogo si no los necesita.
+
+Variables nuevas en Vercel:
+
+- `KOHA_PATRONS_ENABLED=true`
+- `KOHA_PATRONS_API_USERNAME`: usuario técnico exclusivo para consulta de usuarios.
+- `KOHA_PATRONS_API_PASSWORD`: contraseña de esa cuenta.
+
+La URL base y la ruta REST se comparten con la configuración existente (`KOHA_BASE_URL` y `KOHA_API_PATH`). La búsqueda permanece deshabilitada por defecto.
+
+### 2. Validar libros de una solicitud
+
+`POST /api/adquisiciones`
+
+Envía `books` como arreglo, o `book` para un solo registro. Cada libro admite `title`, `author`, `publisher`, `edition`, `year`, `identifier`, `identifier_type` y `quantities`. La respuesta conserva los datos originales y devuelve `normalized`, `validation`, `matches` y `warnings` para cada libro.
+
+### Ejemplo completo desde Google Apps Script
+
+Si la interfaz está construida con HTML Service de Google Apps Script, el navegador debe llamar a funciones de Apps Script y nunca conocer la clave privada.
+
+**Código del servidor (`Code.gs`):**
+
+```javascript
+const BOOKY_API_BASE = 'https://booky-api.vercel.app/api';
+
+function bookyRequest_(path, options) {
+  const apiKey = PropertiesService.getScriptProperties()
+    .getProperty('BOOKY_ACQUISITIONS_API_KEY');
+  if (!apiKey) throw new Error('Falta BOOKY_ACQUISITIONS_API_KEY en Script Properties.');
+
+  const response = UrlFetchApp.fetch(BOOKY_API_BASE + path, {
+    ...options,
+    contentType: 'application/json',
+    headers: { ...(options.headers || {}), 'x-api-key': apiKey },
+    muteHttpExceptions: true
+  });
+  const status = response.getResponseCode();
+  const data = JSON.parse(response.getContentText() || '{}');
+  if (status < 200 || status >= 300) {
+    throw new Error(data.error || 'No fue posible completar la operación.');
+  }
+  return data;
+}
+
+// Función invocada por la interfaz para buscar al solicitante.
+function buscarSolicitante(cardnumber) {
+  const params = `?cardnumber=${encodeURIComponent(String(cardnumber || '').trim())}`;
+  return bookyRequest_('/adquisiciones/usuarios' + params, { method: 'get' });
+}
+
+// Función invocada por la interfaz para validar los libros.
+function validarLibros(books) {
+  return bookyRequest_('/adquisiciones', {
+    method: 'post',
+    payload: JSON.stringify({ books })
+  });
+}
+```
+
+Guarda `BOOKY_ACQUISITIONS_API_KEY` en **Configuración del proyecto → Propiedades del script**.
+
+**Código del cliente (`Index.html`):**
+
+```javascript
+function consultarSolicitante() {
+  const cardnumber = document.getElementById('cardnumber').value.trim();
+  if (!cardnumber) return mostrarError('Captura el número de tarjeta.');
+
+  google.script.run
+    .withSuccessHandler(data => {
+      if (!data.found) return mostrarError('No se encontró ese usuario.');
+      // Si hay varios registros, mostrar opciones para que la persona
+      // seleccione y confirme el registro correcto.
+      mostrarOpcionesSolicitante(data.results, user => {
+        document.getElementById('solicitante').textContent =
+          `${user.full_name} · ${user.cardnumber}`;
+        document.getElementById('borrowernumber').value = user.borrowernumber;
+        document.getElementById('cardnumber_confirmado').value = user.cardnumber;
+      });
+    })
+    .withFailureHandler(error => mostrarError(error.message))
+    .buscarSolicitante(cardnumber);
+}
+
+function revisarLibros(books) {
+  google.script.run
+    .withSuccessHandler(data => mostrarResultados(data.results))
+    .withFailureHandler(error => mostrarError(error.message))
+    .validarLibros(books);
+}
+```
+
+`mostrarError` y `mostrarResultados` representan las funciones de presentación de tu interfaz. El `borrowernumber` y el `cardnumber` confirmados se conservan en campos ocultos/estado del formulario; cuando se implemente el guardado de la solicitud, se enviarán al backend de persistencia.
+
+Si el frontend no utiliza Google Apps Script, aplica el mismo patrón con tu backend: el navegador llama a tu servidor y este servidor añade `x-api-key` al comunicarse con Booky. Nunca expongas la clave en JavaScript público, HTML, variables `VITE_*` ni repositorios.
+
+### Flujo recomendado de la interfaz
+
+1. La persona captura el `cardnumber` del docente/solicitante.
+2. El frontend consulta el endpoint de usuarios.
+3. Muestra el nombre y la tarjeta encontrados para confirmar la identidad.
+4. Guarda en el estado del formulario `borrowernumber` y `cardnumber`.
+5. La persona captura uno o varios libros.
+6. El frontend envía los libros al endpoint de adquisiciones.
+7. Presenta por libro el estado de validación, coincidencias y advertencias.
+8. Cuando el sistema de solicitudes tenga una operación de guardado, envía también el `borrowernumber` seleccionado para asociar la solicitud.
+
+**Alcance actual:** estos endpoints buscan usuarios y validan libros; no crean ni guardan solicitudes de adquisición. El `borrowernumber` se conserva en el frontend para relacionarlo cuando exista un endpoint de registro. No debe confundirse la validación bibliográfica con la autorización o aprobación de una compra.
