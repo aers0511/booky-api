@@ -1,0 +1,633 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Styles'); ?>
+</head>
+
+<body>
+
+  <header class="encabezado">
+    <div class="encabezado-contenido">
+      <h1>Solicitud de Material Bibliográfico</h1>
+      <p>Bibliotecas ITSON · Sistema de requerimientos bibliográficos</p>
+    </div>
+  </header>
+
+  <main class="contenedor">
+
+    <div id="mensaje" class="mensaje"></div>
+
+    <form id="formulario">
+
+      <section class="tarjeta">
+        <h2>1. Datos del solicitante</h2>
+
+        <div class="rejilla">
+
+          <div class="campo busqueda-profesor" style="grid-column:1 / -1">
+            <label for="cardnumber">Número de tarjeta del profesor *</label>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <input id="cardnumber" name="cardnumber"
+                     type="text" required maxlength="64"
+                     autocomplete="off"
+                     placeholder="Ingresa el número de tarjeta"
+                     style="flex:1;min-width:220px">
+              <button id="btnBuscarProfesor" type="button"
+                      class="boton boton-secundario"
+                      onclick="consultarSolicitante()">
+                Buscar en Koha
+              </button>
+            </div>
+            <p id="estadoBusquedaProfesor" class="estado-busqueda texto-ayuda"
+               aria-live="polite">Busca al profesor para completar sus datos.</p>
+            <input id="borrowernumber" type="hidden" value="">
+            <input id="cardnumberConfirmado" type="hidden" value="">
+          </div>
+
+          <div class="campo">
+            <label for="solicitante">Nombre del profesor *</label>
+            <input id="solicitante" name="solicitante"
+                   type="text" required readonly
+                   placeholder="Se completará al encontrarlo en Koha">
+          </div>
+
+          <div class="campo">
+            <label for="extension">Extensión telefónica *</label>
+            <input id="extension" name="extension"
+                   type="text" required
+                   placeholder="Número de extensión">
+          </div>
+
+          <div class="campo">
+            <label for="programa">Programa educativo *</label>
+            <input id="programa" name="programa"
+                   type="text" required
+                   placeholder="Nombre del programa educativo">
+          </div>
+
+          <div class="campo">
+            <label for="materia">Materia que respalda la solicitud *</label>
+            <input id="materia" name="materia"
+                   type="text" required
+                   placeholder="Nombre de la materia">
+          </div>
+
+        </div>
+
+        <div class="campo" style="margin-top:16px">
+          <label for="justificacion">Justificación u observaciones</label>
+          <textarea id="justificacion" name="justificacion"
+                    placeholder="Describe brevemente la necesidad del material bibliográfico."></textarea>
+        </div>
+      </section>
+
+
+      <section class="tarjeta">
+        <h2>2. Material bibliográfico solicitado</h2>
+
+        <p class="texto-ayuda">
+          Puedes agregar varios libros dentro de una misma solicitud.
+          Indica la cantidad requerida para cada campus.
+        </p>
+
+        <div id="listaLibros"></div>
+
+        <div class="acciones" style="margin-top:14px">
+          <button id="btnValidarLibros" type="button"
+                  class="boton boton-secundario"
+                  onclick="validarLibrosEnBooky()">
+            Validar libros en catálogo con Booky
+          </button>
+        </div>
+        <div id="resultadoValidacionBooky" class="mensaje"
+             aria-live="polite" style="margin-top:12px"></div>
+
+        <div class="acciones">
+          <button type="button" class="boton boton-secundario"
+                  onclick="agregarLibro()">
+            + Agregar otro libro
+          </button>
+        </div>
+
+      </section>
+
+
+      <section class="tarjeta">
+        <h2>3. Enviar solicitud</h2>
+
+        <p class="texto-ayuda">
+          Verifica que los datos y cantidades sean correctos antes de enviar.
+          Al finalizar, recibirás un folio de seguimiento.
+        </p>
+
+        <div class="acciones">
+          <button id="btnEnviar" type="submit" class="boton boton-amarillo">
+            Enviar solicitud
+          </button>
+        </div>
+
+      </section>
+
+    </form>
+
+    <section id="confirmacion" class="tarjeta oculto">
+      <h2>¡Solicitud registrada!</h2>
+      <p>Tu solicitud fue recibida correctamente.</p>
+      <p>Tu folio de seguimiento es:</p>
+      <h2 id="folioGenerado"></h2>
+      <p class="texto-ayuda">
+        Guarda este folio para futuras consultas.
+      </p>
+      <button type="button" class="boton"
+              onclick="nuevaSolicitud()">
+        Registrar otra solicitud
+      </button>
+    </section>
+
+  </main>
+
+  <footer class="pie">
+    Sistema de Requerimientos Bibliográficos · Bibliotecas ITSON
+  </footer>
+
+
+<script>
+  const CAMPUS = [
+    'Centro',
+    'Náinari',
+    'Guaymas',
+    'Navojoa',
+    'Empalme'
+  ];
+
+  let contadorLibros = 0;
+
+  function agregarLibro() {
+    contadorLibros++;
+
+    const numero = contadorLibros;
+    const contenedor = document.createElement('div');
+
+    contenedor.className = 'libro';
+    contenedor.dataset.libro = numero;
+
+    contenedor.innerHTML = `
+      <div class="libro-encabezado">
+        <h3>Libro ${numero}</h3>
+        <button type="button"
+                class="boton boton-secundario"
+                onclick="eliminarLibro(${numero})">
+          Quitar
+        </button>
+      </div>
+
+      <div class="rejilla">
+
+        <div class="campo">
+          <label>Título *</label>
+          <input type="text" class="titulo" required
+                 placeholder="Título del libro">
+        </div>
+
+        <div class="campo">
+          <label>Autor</label>
+          <input type="text" class="autor"
+                 placeholder="Autor o autores">
+        </div>
+
+        <div class="campo">
+          <label>Editorial</label>
+          <input type="text" class="editorial"
+                 placeholder="Editorial">
+        </div>
+
+        <div class="campo">
+          <label>Edición</label>
+          <input type="text" class="edicion"
+                 placeholder="Ej. Segunda edición">
+        </div>
+
+        <div class="campo">
+          <label>Año de publicación</label>
+          <input type="text" class="anio"
+                 placeholder="Ej. 2025">
+        </div>
+
+        <div class="campo">
+          <label>ISBN / ISSN</label>
+          <input type="text" class="isbn"
+                 placeholder="Número de identificación">
+        </div>
+
+      </div>
+
+      <h3 style="margin-top:20px">
+        Cantidades por campus
+      </h3>
+
+      <div class="cantidades">
+        ${CAMPUS.map((campus, indice) => `
+          <div class="campo cantidad">
+            <label>${campus}</label>
+            <input type="number" min="0" step="1"
+                   value="0" class="cantidad-campus"
+                   data-campus="${indice}">
+          </div>
+        `).join('')}
+      </div>
+
+      <p class="texto-ayuda">
+        Indica al menos un ejemplar en alguno de los campus.
+      </p>
+    `;
+
+    document.getElementById('listaLibros').appendChild(contenedor);
+  }
+
+
+  function eliminarLibro(numero) {
+    const libros = document.querySelectorAll('.libro');
+
+    if (libros.length <= 1) {
+      mostrarMensaje(
+        'Debes conservar al menos un libro en la solicitud.',
+        'error'
+      );
+      return;
+    }
+
+    const elemento = document.querySelector(
+      '[data-libro="' + numero + '"]'
+    );
+
+    if (elemento) elemento.remove();
+  }
+
+
+  function recopilarLibros() {
+    const elementos = document.querySelectorAll('.libro');
+
+    return Array.from(elementos).map(elemento => {
+      const obtener = clase =>
+        elemento.querySelector('.' + clase).value.trim();
+
+      const cantidades = {};
+
+      CAMPUS.forEach((campus, indice) => {
+        const campo = elemento.querySelector(
+          '[data-campus="' + indice + '"]'
+        );
+
+        cantidades[campus] = Number(campo.value || 0);
+      });
+
+      return {
+        titulo: obtener('titulo'),
+        autor: obtener('autor'),
+        editorial: obtener('editorial'),
+        edicion: obtener('edicion'),
+        anio: obtener('anio'),
+        isbn: obtener('isbn'),
+        cantidades: cantidades
+      };
+    });
+  }
+
+
+  function mostrarMensaje(texto, tipo) {
+    const mensaje = document.getElementById('mensaje');
+
+    mensaje.textContent = texto;
+    mensaje.className = 'mensaje ' + tipo;
+    mensaje.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center'
+    });
+  }
+
+
+
+  function establecerEstadoBusqueda(texto, tipo) {
+    const estado = document.getElementById('estadoBusquedaProfesor');
+    estado.textContent = texto;
+    estado.dataset.tipo = tipo || '';
+    estado.classList.add('visible');
+    estado.classList.remove('estado-exito', 'estado-error', 'estado-cargando');
+
+    if (tipo === 'exito') estado.classList.add('estado-exito');
+    if (tipo === 'error') estado.classList.add('estado-error');
+    if (tipo === 'cargando') estado.classList.add('estado-cargando');
+  }
+
+  function limpiarSolicitanteConfirmado() {
+    document.getElementById('solicitante').value = '';
+    document.getElementById('borrowernumber').value = '';
+    document.getElementById('cardnumberConfirmado').value = '';
+  }
+
+  function consultarSolicitante() {
+    const campoTarjeta = document.getElementById('cardnumber');
+    const cardnumber = campoTarjeta.value.trim();
+    const boton = document.getElementById('btnBuscarProfesor');
+
+    if (!cardnumber) {
+      establecerEstadoBusqueda('Captura el número de tarjeta.', 'error');
+      campoTarjeta.focus();
+      return;
+    }
+
+    boton.disabled = true;
+    boton.textContent = 'Buscando...';
+    limpiarSolicitanteConfirmado();
+    establecerEstadoBusqueda('Consultando usuarios en Koha...', 'cargando');
+
+    google.script.run
+      .withSuccessHandler(function(respuesta) {
+        boton.disabled = false;
+        boton.textContent = 'Buscar en Koha';
+
+        if (!respuesta || respuesta.success === false ||
+            respuesta.found === false ||
+            !Array.isArray(respuesta.results) || respuesta.results.length === 0) {
+          establecerEstadoBusqueda(
+            'No se encontró un usuario con ese número de tarjeta.',
+            'error'
+          );
+          return;
+        }
+
+        if (respuesta.results.length !== 1) {
+          establecerEstadoBusqueda(
+            'Koha devolvió más de un resultado. No se puede confirmar una identidad única; contacta a Bibliotecas.',
+            'error'
+          );
+          return;
+        }
+
+        const usuario = respuesta.results[0];
+        if (!usuario.borrowernumber || !usuario.cardnumber || !usuario.full_name) {
+          establecerEstadoBusqueda(
+            'Koha devolvió datos incompletos para este usuario.',
+            'error'
+          );
+          return;
+        }
+
+        document.getElementById('solicitante').value = usuario.full_name;
+        document.getElementById('borrowernumber').value = usuario.borrowernumber;
+        document.getElementById('cardnumberConfirmado').value = usuario.cardnumber;
+        campoTarjeta.value = usuario.cardnumber;
+
+        const sucursal = usuario.branchcode
+          ? ' · Sucursal: ' + usuario.branchcode
+          : '';
+
+        establecerEstadoBusqueda(
+          'Usuario encontrado: ' + usuario.full_name + sucursal,
+          'exito'
+        );
+      })
+      .withFailureHandler(function(error) {
+        boton.disabled = false;
+        boton.textContent = 'Buscar en Koha';
+        establecerEstadoBusqueda(
+          error && error.message
+            ? error.message
+            : 'No fue posible consultar Booky API.',
+          'error'
+        );
+      })
+      .buscarSolicitante(cardnumber);
+  }
+
+  function validarLibrosEnBooky() {
+    const libros = recopilarLibros();
+    const boton = document.getElementById('btnValidarLibros');
+    const contenedor = document.getElementById('resultadoValidacionBooky');
+
+    if (!libros.length) {
+      contenedor.textContent = 'Agrega al menos un libro para validarlo.';
+      contenedor.className = 'mensaje error';
+      return;
+    }
+
+    boton.disabled = true;
+    boton.textContent = 'Validando...';
+    contenedor.textContent = 'Booky está normalizando los datos y consultando el catálogo Koha...';
+    contenedor.className = 'mensaje';
+
+    google.script.run
+      .withSuccessHandler(function(respuesta) {
+        boton.disabled = false;
+        boton.textContent = 'Validar libros en catálogo con Booky';
+        contenedor.innerHTML = '';
+
+        if (!respuesta || !Array.isArray(respuesta.results)) {
+          contenedor.textContent = 'Booky no devolvió resultados de validación.';
+          contenedor.className = 'mensaje error';
+          return;
+        }
+
+        respuesta.results.forEach(function(resultado, indice) {
+          const tarjeta = document.createElement('div');
+          tarjeta.style.cssText = 'padding:12px;margin:10px 0;border:1px solid #d8e0e8;border-radius:10px;background:#fff';
+
+          const titulo = document.createElement('strong');
+          titulo.textContent = (indice + 1) + '. ' +
+            ((resultado.original && resultado.original.title) || 'Libro sin título');
+          tarjeta.appendChild(titulo);
+
+          const estado = document.createElement('p');
+          const estados = {
+            exact_match: 'Coincidencia fuerte en el catálogo',
+            possible_match: 'Se encontraron coincidencias posibles',
+            not_found: 'No se encontraron coincidencias',
+            pending: 'Validación pendiente'
+          };
+          estado.textContent = estados[resultado.status] || 'Resultado no identificado';
+          estado.style.margin = '6px 0';
+          tarjeta.appendChild(estado);
+
+          const cantidad = document.createElement('p');
+          const encontrados = resultado.validation
+            ? resultado.validation.matches_found
+            : 0;
+          cantidad.textContent = 'Coincidencias encontradas: ' + (encontrados || 0);
+          tarjeta.appendChild(cantidad);
+
+          if (Array.isArray(resultado.warnings)) {
+            resultado.warnings.forEach(function(aviso) {
+              const nota = document.createElement('p');
+              nota.textContent = aviso;
+              nota.style.cssText = 'margin:5px 0;color:#5b6470;font-size:13px';
+              tarjeta.appendChild(nota);
+            });
+          }
+
+          contenedor.appendChild(tarjeta);
+        });
+
+        const notaFinal = document.createElement('p');
+        notaFinal.textContent =
+          'Esta validación es orientativa. Puedes enviar la solicitud aunque existan coincidencias; la revisión final corresponde al personal bibliotecario.';
+        contenedor.appendChild(notaFinal);
+        contenedor.className = 'mensaje exito';
+      })
+      .withFailureHandler(function(error) {
+        boton.disabled = false;
+        boton.textContent = 'Validar libros en catálogo con Booky';
+        contenedor.textContent = error && error.message
+          ? error.message
+          : 'No fue posible validar los libros con Booky.';
+        contenedor.className = 'mensaje error';
+      })
+      .validarLibrosBooky(libros);
+  }
+
+  document.getElementById('cardnumber')
+    .addEventListener('input', function() {
+      limpiarSolicitanteConfirmado();
+      establecerEstadoBusqueda(
+        'El número cambió. Vuelve a buscarlo en Koha.',
+        'pendiente'
+      );
+    });
+
+  document.getElementById('formulario')
+    .addEventListener('submit', function(evento) {
+
+      evento.preventDefault();
+
+      const formulario = evento.currentTarget;
+
+      if (!formulario.reportValidity()) return;
+
+      const btn = document.getElementById('btnEnviar');
+
+      const datos = {
+        solicitante: document.getElementById('solicitante').value.trim(),
+        cardnumber: document.getElementById('cardnumberConfirmado').value.trim(),
+        borrowernumber: document.getElementById('borrowernumber').value.trim(),
+        extension: document.getElementById('extension').value.trim(),
+        programa: document.getElementById('programa').value.trim(),
+        materia: document.getElementById('materia').value.trim(),
+        justificacion: document.getElementById('justificacion').value.trim(),
+        libros: recopilarLibros()
+      };
+
+      if (!datos.cardnumber || !datos.borrowernumber || !datos.solicitante) {
+        mostrarMensaje(
+          'Primero busca y confirma al profesor mediante su número de tarjeta en Koha.',
+          'error'
+        );
+        document.getElementById('cardnumber').focus();
+        return;
+      }
+
+      const cantidadesInvalidas = datos.libros.some(libro => {
+        return Object.values(libro.cantidades).some(cantidad =>
+          !Number.isInteger(cantidad) || cantidad < 0
+        );
+      });
+
+      if (cantidadesInvalidas) {
+        mostrarMensaje(
+          'Revisa las cantidades: deben ser números enteros iguales o mayores a cero.',
+          'error'
+        );
+        return;
+      }
+
+      const librosSinCantidad = datos.libros.some(libro =>
+        Object.values(libro.cantidades)
+          .reduce((suma, cantidad) => suma + cantidad, 0) <= 0
+      );
+
+      if (librosSinCantidad) {
+        mostrarMensaje(
+          'Cada libro debe tener al menos una cantidad asignada.',
+          'error'
+        );
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Enviando solicitud...';
+
+      mostrarMensaje('Procesando tu solicitud...', 'exito');
+
+      google.script.run
+        .withSuccessHandler(function(respuesta) {
+
+          btn.disabled = false;
+          btn.textContent = 'Enviar solicitud';
+
+          if (!respuesta || !respuesta.correcto) {
+            mostrarMensaje(
+              'No fue posible confirmar el registro.',
+              'error'
+            );
+            return;
+          }
+
+          document.getElementById('formulario').classList.add('oculto');
+
+          document.getElementById('folioGenerado').textContent =
+            respuesta.folio;
+
+          document.getElementById('confirmacion').classList.remove('oculto');
+
+          document.getElementById('confirmacion')
+            .scrollIntoView({ behavior: 'smooth' });
+
+        })
+        .withFailureHandler(function(error) {
+
+          btn.disabled = false;
+          btn.textContent = 'Enviar solicitud';
+
+          mostrarMensaje(
+            error && error.message
+              ? error.message
+              : 'Ocurrió un error al registrar la solicitud.',
+            'error'
+          );
+
+        })
+        .registrarSolicitud(datos);
+
+    });
+
+
+  function nuevaSolicitud() {
+    document.getElementById('formulario').reset();
+
+    document.getElementById('listaLibros').innerHTML = '';
+    limpiarSolicitanteConfirmado();
+    document.getElementById('cardnumber').value = '';
+    establecerEstadoBusqueda('Busca al profesor para completar sus datos.', '');
+    document.getElementById('resultadoValidacionBooky').innerHTML = '';
+    document.getElementById('resultadoValidacionBooky').className = 'mensaje';
+
+    contadorLibros = 0;
+    agregarLibro();
+
+    document.getElementById('confirmacion').classList.add('oculto');
+    document.getElementById('formulario').classList.remove('oculto');
+
+    document.getElementById('mensaje').className = 'mensaje';
+    document.getElementById('mensaje').textContent = '';
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+
+  // Iniciar con un libro disponible para captura.
+  agregarLibro();
+
+</script>
+
+</body>
+</html>

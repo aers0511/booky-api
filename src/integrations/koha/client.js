@@ -241,9 +241,13 @@ async function searchBiblios(config, rawQuery, options = {}) {
   };
 }
 
-function normalizePatron(record) {
+function normalizePatron(record, searchedCardnumber = '') {
   const borrowernumber = record?.borrowernumber ?? record?.patron_id ?? record?.id;
-  const cardnumber = firstText(record?.cardnumber);
+  // Koha puede filtrar por cardnumber y, aun así, omitir ese campo en la
+  // respuesta por las reglas de visibilidad de la cuenta técnica.
+  // El fallback solo se usa porque el registro ya fue filtrado por Koha
+  // mediante cardnumber + _match=exact en la petición.
+  const cardnumber = firstText(record?.cardnumber, searchedCardnumber);
   const firstname = firstText(record?.firstname);
   const surname = firstText(record?.surname);
   const branchcode = firstText(record?.branchcode);
@@ -284,14 +288,21 @@ async function searchPatronByCardnumber(config, rawCardnumber) {
     _per_page: 5,
     _page: 1
   });
-  const records = asArray(data)
-    .filter(record => String(record?.cardnumber || '').trim().toLowerCase() === cardnumber.toLowerCase());
+
+  // Koha ya aplica el filtro exacto en el servidor. No volvemos a exigir
+  // que cardnumber venga visible en el JSON, porque Koha puede redactar
+  // ese campo según la biblioteca/grupo de la cuenta técnica.
+  const records = asArray(data).filter(record => {
+    const returnedCardnumber = firstText(record?.cardnumber);
+    return !returnedCardnumber ||
+      returnedCardnumber.toLowerCase() === cardnumber.toLowerCase();
+  });
 
   return {
     query: { cardnumber },
     found: records.length > 0,
     total: records.length,
-    results: records.slice(0, 5).map(normalizePatron)
+    results: records.slice(0, 5).map(record => normalizePatron(record, cardnumber))
   };
 }
 

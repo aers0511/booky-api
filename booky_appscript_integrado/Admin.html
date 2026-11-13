@@ -1,0 +1,646 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Styles'); ?>
+</head>
+
+<body>
+
+<header class="encabezado">
+  <div class="encabezado-contenido">
+    <h1>Administración de Solicitudes Bibliográficas</h1>
+    <p>Bibliotecas ITSON · Panel de gestión</p>
+  </div>
+</header>
+
+<main class="contenedor">
+
+  <div id="mensaje" class="mensaje"></div>
+
+  <section class="tarjeta">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>
+        <h2 style="margin-bottom:5px">Panel de solicitudes</h2>
+        <p class="texto-ayuda">Consulta y administra los requerimientos bibliográficos recibidos.</p>
+      </div>
+
+      <div class="acciones" style="margin-top:0">
+        <button class="boton boton-secundario" onclick="cargarSolicitudes()">
+          ↻ Actualizar
+        </button>
+        <button class="boton boton-amarillo" onclick="exportarCSV()">
+          ↓ Exportar CSV
+        </button>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="rejilla" style="margin-bottom:20px">
+
+    <div class="tarjeta" style="margin:0">
+      <p class="texto-ayuda">Total de solicitudes</p>
+      <h2 id="totalSolicitudes" style="font-size:30px;margin:0">0</h2>
+    </div>
+
+    <div class="tarjeta" style="margin:0">
+      <p class="texto-ayuda">Recibidas</p>
+      <h2 id="totalRecibidas" style="font-size:30px;margin:0">0</h2>
+    </div>
+
+    <div class="tarjeta" style="margin:0">
+      <p class="texto-ayuda">En proceso</p>
+      <h2 id="totalProceso" style="font-size:30px;margin:0">0</h2>
+    </div>
+
+    <div class="tarjeta" style="margin:0">
+      <p class="texto-ayuda">Atendidas</p>
+      <h2 id="totalAtendidas" style="font-size:30px;margin:0">0</h2>
+    </div>
+
+  </section>
+
+
+  <section class="tarjeta">
+
+    <h2>Buscar y filtrar solicitudes</h2>
+
+    <div class="rejilla">
+
+      <div class="campo">
+        <label for="busqueda">Buscar</label>
+        <input id="busqueda" type="search"
+               placeholder="Folio, profesor, correo o programa..."
+               oninput="aplicarFiltros()">
+      </div>
+
+      <div class="campo">
+        <label for="filtroEstado">Estado</label>
+        <select id="filtroEstado" onchange="aplicarFiltros()">
+          <option value="">Todos los estados</option>
+          <option>Recibida</option>
+          <option>En revisión</option>
+          <option>Autorizada</option>
+          <option>En proceso</option>
+          <option>Atendida</option>
+          <option>No autorizada</option>
+        </select>
+      </div>
+
+    </div>
+
+  </section>
+
+
+  <section class="tarjeta">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <h2 style="margin-bottom:12px">Solicitudes registradas</h2>
+      <span id="contadorResultados" class="insignia">0 resultados</span>
+    </div>
+
+    <div class="tabla-contenedor">
+      <table>
+        <thead>
+          <tr>
+            <th>Folio</th>
+            <th>Fecha</th>
+            <th>Solicitante</th>
+            <th>Programa educativo</th>
+            <th>Libros</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tablaSolicitudes">
+          <tr>
+            <td colspan="7">Cargando solicitudes...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </section>
+
+
+  <section id="detalleSolicitud" class="tarjeta oculto">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <h2>Detalle de solicitud</h2>
+      <button class="boton boton-secundario" onclick="cerrarDetalle()">
+        Cerrar
+      </button>
+    </div>
+
+    <div id="contenidoDetalle"></div>
+
+  </section>
+
+</main>
+
+<footer class="pie">
+  Administración del Sistema de Requerimientos Bibliográficos · ITSON
+</footer>
+
+
+<script>
+
+  let solicitudes = [];
+  let solicitudesFiltradas = [];
+
+  function mostrarMensaje(texto, tipo) {
+    const mensaje = document.getElementById('mensaje');
+    mensaje.textContent = texto;
+    mensaje.className = 'mensaje ' + tipo;
+    mensaje.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+
+  function escaparHTML(valor) {
+    return String(valor ?? '').replace(/[&<>"']/g, caracter => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    })[caracter]);
+  }
+
+
+  function fechaLegible(fecha) {
+    if (!fecha) return '';
+
+    const valor = new Date(fecha);
+
+    if (isNaN(valor.getTime())) return String(fecha);
+
+    return valor.toLocaleDateString('es-MX');
+  }
+
+
+  function cargarSolicitudes() {
+
+    const tabla = document.getElementById('tablaSolicitudes');
+
+    tabla.innerHTML = `
+      <tr><td colspan="7">Cargando información...</td></tr>
+    `;
+
+    google.script.run
+     .withSuccessHandler(function(resultado) {
+
+  solicitudes = Array.isArray(resultado) ? resultado : [];
+
+
+  actualizarIndicadores();
+  aplicarFiltros();
+
+})
+      .withFailureHandler(function(error) {
+
+        tabla.innerHTML = `
+          <tr><td colspan="7">No fue posible cargar las solicitudes.</td></tr>
+        `;
+
+        mostrarMensaje(
+          error && error.message
+            ? error.message
+            : 'Error al consultar las solicitudes.',
+          'error'
+        );
+
+      })
+      .obtenerSolicitudesAdmin();
+
+  }
+
+
+  function actualizarIndicadores() {
+
+    document.getElementById('totalSolicitudes').textContent =
+      solicitudes.length;
+
+    document.getElementById('totalRecibidas').textContent =
+      solicitudes.filter(s => s.estado === 'Recibida').length;
+
+    document.getElementById('totalProceso').textContent =
+      solicitudes.filter(s =>
+        ['En revisión', 'Autorizada', 'En proceso'].includes(s.estado)
+      ).length;
+
+    document.getElementById('totalAtendidas').textContent =
+      solicitudes.filter(s => s.estado === 'Atendida').length;
+
+  }
+
+
+  function aplicarFiltros() {
+
+    const texto = document.getElementById('busqueda')
+      .value.trim().toLowerCase();
+
+    const estado = document.getElementById('filtroEstado').value;
+
+    solicitudesFiltradas = solicitudes.filter(s => {
+
+      const coincideTexto = [
+        s.folio,
+        s.solicitante,
+        s.correo,
+        s.programa,
+        s.materia
+      ].some(valor =>
+        String(valor || '').toLowerCase().includes(texto)
+      );
+
+      const coincideEstado = !estado || s.estado === estado;
+
+      return coincideTexto && coincideEstado;
+
+    });
+
+    dibujarTabla();
+
+  }
+
+
+  function dibujarTabla() {
+
+    const tabla = document.getElementById('tablaSolicitudes');
+
+    document.getElementById('contadorResultados').textContent =
+      solicitudesFiltradas.length + ' resultados';
+
+    if (!solicitudesFiltradas.length) {
+
+      tabla.innerHTML = `
+        <tr><td colspan="7">No se encontraron solicitudes.</td></tr>
+      `;
+
+      return;
+    }
+
+    tabla.innerHTML = solicitudesFiltradas.map(s => `
+
+      <tr>
+        <td><strong>${escaparHTML(s.folio)}</strong></td>
+        <td>${escaparHTML(fechaLegible(s.fecha))}</td>
+        <td>
+          ${escaparHTML(s.solicitante)}
+          <div class="texto-ayuda">${escaparHTML(s.correo)}</div>
+        </td>
+        <td>${escaparHTML(s.programa)}</td>
+        <td>${(s.libros || []).length}</td>
+        <td><span class="insignia">${escaparHTML(s.estado)}</span></td>
+        <td>
+          <button class="boton boton-secundario"
+                  onclick="verDetalle('${escaparHTML(s.folio)}')">
+            Ver detalle
+          </button>
+        </td>
+      </tr>
+
+    `).join('');
+
+  }
+
+
+  function verDetalle(folio) {
+
+    const solicitud = solicitudes.find(s => s.folio === folio);
+
+    if (!solicitud) return;
+
+    const libros = solicitud.libros || [];
+
+    let html = `
+
+      <div class="rejilla" style="margin-bottom:20px">
+
+        <div>
+          <p class="texto-ayuda">Folio</p>
+          <strong>${escaparHTML(solicitud.folio)}</strong>
+        </div>
+
+        <div>
+          <p class="texto-ayuda">Fecha y hora</p>
+          <strong>${escaparHTML(fechaLegible(solicitud.fecha))}
+            ${escaparHTML(solicitud.hora)}</strong>
+        </div>
+
+        <div>
+          <p class="texto-ayuda">Solicitante</p>
+          <strong>${escaparHTML(solicitud.solicitante)}</strong>
+        </div>
+
+        <div>
+          <p class="texto-ayuda">Número de tarjeta Koha</p>
+          <strong>${escaparHTML(solicitud.cardnumber || 'No disponible')}</strong>
+        </div>
+
+        <div>
+          <p class="texto-ayuda">Identificador Koha</p>
+          <strong>${escaparHTML(solicitud.borrowernumber || 'No disponible')}</strong>
+        </div>
+
+        <div>
+          <p class="texto-ayuda">Correo</p>
+          <strong>${escaparHTML(solicitud.correo)}</strong>
+        </div>
+
+        <div>
+          <p class="texto-ayuda">Extensión</p>
+          <strong>${escaparHTML(solicitud.extension)}</strong>
+        </div>
+
+        <div>
+          <p class="texto-ayuda">Programa educativo</p>
+          <strong>${escaparHTML(solicitud.programa)}</strong>
+        </div>
+
+        <div>
+          <p class="texto-ayuda">Materia</p>
+          <strong>${escaparHTML(solicitud.materia)}</strong>
+        </div>
+
+      </div>
+
+      <h3>Justificación u observaciones</h3>
+      <p>${escaparHTML(solicitud.justificacion || 'Sin observaciones')}</p>
+
+      <h3 style="margin-top:24px">Material bibliográfico</h3>
+
+    `;
+
+
+    libros.forEach((libro, indice) => {
+
+      html += `
+
+        <div class="libro">
+
+          <h3>${indice + 1}. ${escaparHTML(libro.titulo)}</h3>
+
+          <div class="rejilla">
+
+            <div><span class="texto-ayuda">Autor</span><br>
+              ${escaparHTML(libro.autor || 'No indicado')}
+            </div>
+
+            <div><span class="texto-ayuda">Editorial</span><br>
+              ${escaparHTML(libro.editorial || 'No indicada')}
+            </div>
+
+            <div><span class="texto-ayuda">Edición</span><br>
+              ${escaparHTML(libro.edicion || 'No indicada')}
+            </div>
+
+            <div><span class="texto-ayuda">Año</span><br>
+              ${escaparHTML(libro.anio || 'No indicado')}
+            </div>
+
+            <div><span class="texto-ayuda">ISBN/ISSN</span><br>
+              ${escaparHTML(libro.isbn || 'No indicado')}
+            </div>
+
+          </div>
+
+          <h3 style="margin-top:18px">Cantidades por campus</h3>
+
+          <div class="tabla-contenedor">
+            <table>
+              <thead>
+                <tr>
+                  <th>Centro</th>
+                  <th>Náinari</th>
+                  <th>Guaymas</th>
+                  <th>Navojoa</th>
+                  <th>Empalme</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>${escaparHTML(libro.cantidades.Centro)}</td>
+                  <td>${escaparHTML(libro.cantidades['Náinari'])}</td>
+                  <td>${escaparHTML(libro.cantidades.Guaymas)}</td>
+                  <td>${escaparHTML(libro.cantidades.Navojoa)}</td>
+                  <td>${escaparHTML(libro.cantidades.Empalme)}</td>
+                  <td><strong>${escaparHTML(libro.total)}</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+
+      `;
+
+    });
+
+
+    html += `
+
+      <h3 style="margin-top:24px">Actualizar estado</h3>
+
+      <div class="rejilla">
+
+        <div class="campo">
+          <label for="nuevoEstado">Estado de la solicitud</label>
+          <select id="nuevoEstado">
+            ${[
+              'Recibida',
+              'En revisión',
+              'Autorizada',
+              'En proceso',
+              'Atendida',
+              'No autorizada'
+            ].map(estado => `
+              <option value="${escaparHTML(estado)}"
+                ${estado === solicitud.estado ? 'selected' : ''}>
+                ${escaparHTML(estado)}
+              </option>
+            `).join('')}
+          </select>
+        </div>
+
+      </div>
+
+      <div class="acciones">
+        <button class="boton boton-amarillo"
+                onclick="guardarEstado('${escaparHTML(solicitud.folio)}')">
+          Guardar estado
+        </button>
+      </div>
+
+    `;
+
+
+    document.getElementById('contenidoDetalle').innerHTML = html;
+
+    document.getElementById('detalleSolicitud').classList.remove('oculto');
+
+    document.getElementById('detalleSolicitud')
+      .scrollIntoView({ behavior: 'smooth' });
+
+  }
+
+
+  function cerrarDetalle() {
+    document.getElementById('detalleSolicitud').classList.add('oculto');
+  }
+
+
+  function guardarEstado(folio) {
+
+    const nuevoEstado = document.getElementById('nuevoEstado').value;
+
+    if (!confirm('¿Deseas actualizar el estado de esta solicitud?')) {
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(function(resultado) {
+
+        mostrarMensaje(resultado.mensaje, 'exito');
+
+        cerrarDetalle();
+        cargarSolicitudes();
+
+      })
+      .withFailureHandler(function(error) {
+
+        mostrarMensaje(
+          error && error.message
+            ? error.message
+            : 'No fue posible actualizar el estado.',
+          'error'
+        );
+
+      })
+      .actualizarEstadoSolicitud(folio, nuevoEstado);
+
+  }
+
+
+  function exportarCSV() {
+
+    if (!solicitudes.length) {
+      mostrarMensaje('No hay información para exportar.', 'error');
+      return;
+    }
+
+    const encabezados = [
+      'Folio',
+      'Fecha',
+      'Hora',
+      'Correo',
+      'Solicitante',
+      'Cardnumber Koha',
+      'Borrowernumber Koha',
+      'Extensión',
+      'Programa',
+      'Materia',
+      'Justificación',
+      'Estado',
+      'Título',
+      'Autor',
+      'Editorial',
+      'Edición',
+      'Año',
+      'ISBN/ISSN',
+      'Centro',
+      'Náinari',
+      'Guaymas',
+      'Navojoa',
+      'Empalme',
+      'Total'
+    ];
+
+    const filas = [];
+
+    solicitudes.forEach(s => {
+
+      (s.libros || []).forEach(libro => {
+
+        filas.push([
+          s.folio,
+          fechaLegible(s.fecha),
+          s.hora,
+          s.correo,
+          s.solicitante,
+          s.cardnumber || '',
+          s.borrowernumber || '',
+          s.extension,
+          s.programa,
+          s.materia,
+          s.justificacion,
+          s.estado,
+          libro.titulo,
+          libro.autor,
+          libro.editorial,
+          libro.edicion,
+          libro.anio,
+          libro.isbn,
+          libro.cantidades.Centro,
+          libro.cantidades['Náinari'],
+          libro.cantidades.Guaymas,
+          libro.cantidades.Navojoa,
+          libro.cantidades.Empalme,
+          libro.total
+        ]);
+
+      });
+
+    });
+
+
+    function campoCSV(valor) {
+      let texto = String(valor ?? '');
+
+      // Evita que Excel interprete contenido como fórmulas.
+      if (/^[\s]*[=+\-@]/.test(texto)) {
+        texto = "'" + texto;
+      }
+
+      return '"' + texto.replace(/"/g, '""') + '"';
+    }
+
+
+    const contenido = [
+      encabezados,
+      ...filas
+    ].map(fila =>
+      fila.map(campoCSV).join(',')
+    ).join('\r\n');
+
+
+    const blob = new Blob(
+      ['\uFEFF' + contenido],
+      { type: 'text/csv;charset=utf-8;' }
+    );
+
+    const url = URL.createObjectURL(blob);
+
+    const enlace = document.createElement('a');
+    enlace.href = url;
+    enlace.download = 'Solicitudes_Bibliograficas_ITSON.csv';
+
+    document.body.appendChild(enlace);
+    enlace.click();
+    enlace.remove();
+
+    URL.revokeObjectURL(url);
+
+  }
+
+
+  // Consultar solicitudes al abrir el panel.
+  cargarSolicitudes();
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,28 @@
+ACTUALIZACIÓN DEL SISTEMA DE SOLICITUDES BIBLIOGRÁFICAS - ITSON
+
+ARCHIVOS
+- Code.gs: backend de Apps Script y conexión segura con Booky API.
+- Index.html: formulario con búsqueda de profesor por cardnumber.
+- Admin.html: panel administrativo; incluye cardnumber y borrowernumber en el CSV.
+- Styles.html: estilos CSS proporcionados para el proyecto.
+
+CONFIGURACIÓN
+1. En Apps Script, reemplaza el contenido de Code.gs, Index.html y Admin.html por los archivos de esta carpeta.
+2. Crea un archivo HTML llamado exactamente Styles (Apps Script lo mostrará como Styles.html) y pega el contenido de Styles.html.
+3. En Configuración del proyecto > Propiedades del script, configura BOOKY_ACQUISITIONS_API_KEY con el mismo valor de ACQUISITIONS_API_KEY en Vercel.
+4. En Vercel verifica KOHA_PATRONS_ENABLED=true, KOHA_PATRONS_API_USERNAME y KOHA_PATRONS_API_PASSWORD. Pueden usar las credenciales de catálogo si esa cuenta también tiene permiso Koha borrowers/list_borrowers.
+5. Verifica que KOHA_ENABLED esté habilitado para la validación del catálogo.
+6. En Apps Script ejecuta prepararBaseDatos() una vez y autoriza los permisos solicitados.
+7. Implementa una nueva versión de la aplicación web.
+
+FLUJO
+- La persona captura el número de tarjeta y pulsa Buscar en Koha.
+- Apps Script consulta https://booky-api.vercel.app/api/adquisiciones/usuarios?cardnumber=...
+- El nombre, cardnumber y borrowernumber se rellenan si la API devuelve un resultado único.
+- Al enviar, Apps Script vuelve a consultar Koha y verifica que cardnumber, borrowernumber y nombre coincidan.
+- Los dos identificadores se guardan en Solicitudes. El panel administrativo los muestra en el detalle y los incluye en el CSV.
+
+IMPORTANTE
+La integración espera que el endpoint de usuarios responda JSON con una propiedad results (arreglo), y que cada usuario tenga borrowernumber, cardnumber y full_name. branchcode es opcional. La respuesta puede incluir success y found; si la API utiliza nombres de campos diferentes, habrá que adaptar el mapeo.
+
+No se ha ejecutado una prueba autenticada contra el Koha de producción desde este entorno. Después de implementar, prueba primero con una tarjeta real autorizada. Si falla, copia aquí el mensaje exacto de Apps Script o el JSON de respuesta (ocultando datos personales y credenciales).
