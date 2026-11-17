@@ -108,7 +108,7 @@
             <th>Folio</th>
             <th>Fecha</th>
             <th>Solicitante</th>
-            <th>Programa educativo</th>
+            <th>Programas educativos</th>
             <th>Libros</th>
             <th>Estado</th>
             <th>Acciones</th>
@@ -249,8 +249,7 @@
         s.folio,
         s.solicitante,
         s.correo,
-        s.programa,
-        s.materia
+        ...(s.libros || []).flatMap(libro => [libro.programa, libro.materia, libro.justificacion])
       ].some(valor =>
         String(valor || '').toLowerCase().includes(texto)
       );
@@ -291,7 +290,7 @@
           ${escaparHTML(s.solicitante)}
           <div class="texto-ayuda">${escaparHTML(s.correo)}</div>
         </td>
-        <td>${escaparHTML(s.programa)}</td>
+        <td>${escaparHTML([...new Set((s.libros || []).map(libro => libro.programa).filter(Boolean))].join(', ') || '—')}</td>
         <td>${(s.libros || []).length}</td>
         <td><span class="insignia">${escaparHTML(s.estado)}</span></td>
         <td>
@@ -355,20 +354,8 @@
           <strong>${escaparHTML(solicitud.extension)}</strong>
         </div>
 
-        <div>
-          <p class="texto-ayuda">Programa educativo</p>
-          <strong>${escaparHTML(solicitud.programa)}</strong>
-        </div>
-
-        <div>
-          <p class="texto-ayuda">Materia</p>
-          <strong>${escaparHTML(solicitud.materia)}</strong>
-        </div>
 
       </div>
-
-      <h3>Justificación u observaciones</h3>
-      <p>${escaparHTML(solicitud.justificacion || 'Sin observaciones')}</p>
 
       <h3 style="margin-top:24px">Material bibliográfico</h3>
 
@@ -403,6 +390,18 @@
 
             <div><span class="texto-ayuda">ISBN/ISSN</span><br>
               ${escaparHTML(libro.isbn || 'No indicado')}
+            </div>
+
+            <div><span class="texto-ayuda">Programa educativo</span><br>
+              ${escaparHTML(libro.programa || solicitud.programa || 'No indicado')}
+            </div>
+
+            <div><span class="texto-ayuda">Materia que respalda la solicitud</span><br>
+              ${escaparHTML(libro.materia || solicitud.materia || 'No indicada')}
+            </div>
+
+            <div style="grid-column:1 / -1"><span class="texto-ayuda">Justificación u observaciones</span><br>
+              ${escaparHTML(libro.justificacion || solicitud.justificacion || 'Sin observaciones')}
             </div>
 
           </div>
@@ -541,9 +540,6 @@
       'Cardnumber Koha',
       'Borrowernumber Koha',
       'Extensión',
-      'Programa',
-      'Materia',
-      'Justificación',
       'Estado',
       'Título',
       'Autor',
@@ -551,6 +547,9 @@
       'Edición',
       'Año',
       'ISBN/ISSN',
+      'Programa educativo del libro',
+      'Materia del libro',
+      'Justificación del libro',
       'Centro',
       'Náinari',
       'Guaymas',
@@ -574,9 +573,6 @@
           s.cardnumber || '',
           s.borrowernumber || '',
           s.extension,
-          s.programa,
-          s.materia,
-          s.justificacion,
           s.estado,
           libro.titulo,
           libro.autor,
@@ -584,6 +580,9 @@
           libro.edicion,
           libro.anio,
           libro.isbn,
+          libro.programa || s.programa || '',
+          libro.materia || s.materia || '',
+          libro.justificacion || s.justificacion || '',
           libro.cantidades.Centro,
           libro.cantidades['Náinari'],
           libro.cantidades.Guaymas,

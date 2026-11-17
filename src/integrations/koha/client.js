@@ -252,6 +252,7 @@ function normalizePatron(record, searchedCardnumber = '') {
   const surname = firstText(record?.surname);
   const branchcode = firstText(record?.branchcode);
   const categoryId = firstText(record?.category_id);
+  const sort2 = firstText(record?.sort2);
 
   return {
     borrowernumber: borrowernumber ?? null,
@@ -260,7 +261,8 @@ function normalizePatron(record, searchedCardnumber = '') {
     surname: surname || null,
     full_name: [firstname, surname].filter(Boolean).join(' ') || 'Nombre no disponible',
     branchcode: branchcode || null,
-    category_id: categoryId || null
+    category_id: categoryId || null,
+    sort2: sort2 || null
   };
 }
 

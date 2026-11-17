@@ -56,7 +56,10 @@ const HEADERS_DETALLES = [
   'Guaymas',
   'Navojoa',
   'Empalme',
-  'Total'
+  'Total',
+  'Programa educativo',
+  'Materia que respalda la solicitud',
+  'Justificación u observaciones'
 ];
 
 
@@ -110,6 +113,7 @@ function prepararBaseDatos() {
   asegurarEncabezadosSolicitudes_(
     libro.getSheetByName(CONFIG.SHEET_SOLICITUDES)
   );
+  asegurarEncabezadosDetalles_(libro.getSheetByName(CONFIG.SHEET_DETALLES));
 
   return 'Base de datos preparada correctamente.';
 }
@@ -157,6 +161,21 @@ function asegurarEncabezadosSolicitudes_(hoja) {
   hoja.setFrozenRows(1);
 }
 
+
+/**
+ * Agrega columnas nuevas al final de DetalleLibros sin alterar registros anteriores.
+ */
+function asegurarEncabezadosDetalles_(hoja) {
+  if (!hoja) throw new Error('No se encontró la hoja de detalles.');
+  const ultimaColumna = Math.max(hoja.getLastColumn(), 1);
+  const actuales = hoja.getRange(1, 1, 1, ultimaColumna).getValues()[0];
+  const faltantes = HEADERS_DETALLES.filter(encabezado => actuales.indexOf(encabezado) === -1);
+  if (faltantes.length) {
+    const columnaInicial = hoja.getLastColumn() + 1;
+    hoja.getRange(1, columnaInicial, 1, faltantes.length).setValues([faltantes]).setFontWeight('bold');
+  }
+  hoja.setFrozenRows(1);
+}
 
 /******************************************************
  * IDENTIFICACIÓN Y PERMISOS
@@ -433,8 +452,6 @@ function registrarSolicitud(datos) {
   const campos = [
     'solicitante',
     'extension',
-    'programa',
-    'materia',
     'cardnumber',
     'borrowernumber'
   ];
@@ -468,6 +485,12 @@ function registrarSolicitud(datos) {
         'El libro número ' + (indice + 1) + ' necesita un título.'
       );
     }
+    if (!String(libro.programa || '').trim()) {
+      throw new Error('El libro número ' + (indice + 1) + ' necesita un programa educativo.');
+    }
+    if (!String(libro.materia || '').trim()) {
+      throw new Error('El libro número ' + (indice + 1) + ' necesita la materia que respalda la solicitud.');
+    }
 
     const cantidades = CONFIG.CAMPUS.map(campus => {
       const cantidad = Number(
@@ -498,6 +521,9 @@ function registrarSolicitud(datos) {
       edicion: String(libro.edicion || '').trim(),
       anio: String(libro.anio || '').trim(),
       isbn: String(libro.isbn || '').trim(),
+      programa: String(libro.programa).trim(),
+      materia: String(libro.materia).trim(),
+      justificacion: String(libro.justificacion || '').trim(),
       cantidades: cantidades,
       total: total
     };
@@ -518,6 +544,7 @@ function registrarSolicitud(datos) {
     }
 
     asegurarEncabezadosSolicitudes_(hojaSolicitudes);
+    asegurarEncabezadosDetalles_(hojaDetalles);
 
     const folio = generarFolio_(hojaSolicitudes);
     const fecha = new Date();
@@ -531,9 +558,9 @@ function registrarSolicitud(datos) {
       correo,
       String(datos.solicitante).trim(),
       String(datos.extension).trim(),
-      String(datos.programa).trim(),
-      String(datos.materia).trim(),
-      String(datos.justificacion || '').trim(),
+      '',
+      '',
+      '',
       'Recibida',
       String(datos.cardnumber).trim(),
       String(datos.borrowernumber).trim()
@@ -556,7 +583,10 @@ function registrarSolicitud(datos) {
       item.anio,
       item.isbn,
       ...item.cantidades,
-      item.total
+      item.total,
+      item.programa,
+      item.materia,
+      item.justificacion
     ]);
 
     hojaDetalles.getRange(
@@ -594,6 +624,7 @@ function obtenerSolicitudesAdmin() {
   }
 
   asegurarEncabezadosSolicitudes_(hojaSolicitudes);
+  asegurarEncabezadosDetalles_(hojaDetalles);
 
   const solicitudes = hojaSolicitudes.getLastRow() > 1
     ? hojaSolicitudes.getRange(
@@ -635,7 +666,10 @@ function obtenerSolicitudesAdmin() {
         Navojoa: fila[11],
         Empalme: fila[12]
       },
-      total: fila[13]
+      total: fila[13],
+      programa: fila[14] || '',
+      materia: fila[15] || '',
+      justificacion: fila[16] || ''
     });
   });
 

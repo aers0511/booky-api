@@ -98,7 +98,8 @@ test('normaliza usuario Koha sin exponer datos personales adicionales', () => {
     surname: 'Pérez',
     full_name: 'Ana Pérez',
     branchcode: 'NAI',
-    category_id: 'ST'
+    category_id: 'ST',
+    sort2: null
   });
   assert.equal('email' in patron, false);
   assert.equal('phone' in patron, false);
@@ -118,4 +119,16 @@ test('consolida cantidades por campus sin duplicar campus por ubicación o estad
   assert.equal(summary.find(item => item.branch_code === 'GYM').unavailable, 1);
   assert.equal(summary.find(item => item.branch_code === 'NAI').campus, 'Náinari');
   assert.equal(summary.find(item => item.branch_code === 'EMPL').campus, 'Empalme');
+});
+
+
+test('conserva sort2 del usuario Koha como programa educativo', () => {
+  const patron = normalizePatron({
+    patron_id: 789,
+    cardnumber: '98765',
+    firstname: 'Luis',
+    surname: 'López',
+    sort2: 'Ingeniería en Software'
+  });
+  assert.equal(patron.sort2, 'Ingeniería en Software');
 });

@@ -60,26 +60,6 @@
                    placeholder="Número de extensión">
           </div>
 
-          <div class="campo">
-            <label for="programa">Programa educativo *</label>
-            <input id="programa" name="programa"
-                   type="text" required
-                   placeholder="Nombre del programa educativo">
-          </div>
-
-          <div class="campo">
-            <label for="materia">Materia que respalda la solicitud *</label>
-            <input id="materia" name="materia"
-                   type="text" required
-                   placeholder="Nombre de la materia">
-          </div>
-
-        </div>
-
-        <div class="campo" style="margin-top:16px">
-          <label for="justificacion">Justificación u observaciones</label>
-          <textarea id="justificacion" name="justificacion"
-                    placeholder="Describe brevemente la necesidad del material bibliográfico."></textarea>
         </div>
       </section>
 
@@ -163,6 +143,7 @@
   ];
 
   let contadorLibros = 0;
+  let programaKohaActual = '';
 
   function agregarLibro() {
     contadorLibros++;
@@ -223,6 +204,25 @@
 
       </div>
 
+      <h3 style="margin-top:20px">Información académica de este libro</h3>
+      <div class="rejilla">
+        <div class="campo">
+          <label>Programa educativo *</label>
+          <input type="text" class="programa" required
+                 placeholder="Programa educativo que requiere el libro">
+        </div>
+        <div class="campo">
+          <label>Materia que respalda la solicitud *</label>
+          <input type="text" class="materia" required
+                 placeholder="Materia relacionada con este libro">
+        </div>
+        <div class="campo" style="grid-column:1 / -1">
+          <label>Justificación u observaciones</label>
+          <textarea class="justificacion"
+                    placeholder="Explica por qué se requiere este material bibliográfico."></textarea>
+        </div>
+      </div>
+
       <h3 style="margin-top:20px">
         Cantidades por campus
       </h3>
@@ -244,6 +244,9 @@
     `;
 
     document.getElementById('listaLibros').appendChild(contenedor);
+    if (programaKohaActual) {
+      contenedor.querySelector('.programa').value = programaKohaActual;
+    }
   }
 
 
@@ -290,6 +293,9 @@
         edicion: obtener('edicion'),
         anio: obtener('anio'),
         isbn: obtener('isbn'),
+        programa: obtener('programa'),
+        materia: obtener('materia'),
+        justificacion: obtener('justificacion'),
         cantidades: cantidades
       };
     });
@@ -322,6 +328,13 @@
   }
 
   function limpiarSolicitanteConfirmado() {
+    const programaAnterior = programaKohaActual;
+    if (programaAnterior) {
+      document.querySelectorAll('.libro .programa').forEach(function(campo) {
+        if (campo.value.trim() === programaAnterior) campo.value = '';
+      });
+    }
+    programaKohaActual = '';
     document.getElementById('solicitante').value = '';
     document.getElementById('borrowernumber').value = '';
     document.getElementById('cardnumberConfirmado').value = '';
@@ -379,6 +392,13 @@
         document.getElementById('borrowernumber').value = usuario.borrowernumber;
         document.getElementById('cardnumberConfirmado').value = usuario.cardnumber;
         campoTarjeta.value = usuario.cardnumber;
+
+        programaKohaActual = String(usuario.sort2 || '').trim();
+        if (programaKohaActual) {
+          document.querySelectorAll('.libro .programa').forEach(function(campo) {
+            if (!campo.value.trim()) campo.value = programaKohaActual;
+          });
+        }
 
         const sucursal = usuario.branchcode
           ? ' · Sucursal: ' + usuario.branchcode
@@ -577,9 +597,6 @@
         cardnumber: document.getElementById('cardnumberConfirmado').value.trim(),
         borrowernumber: document.getElementById('borrowernumber').value.trim(),
         extension: document.getElementById('extension').value.trim(),
-        programa: document.getElementById('programa').value.trim(),
-        materia: document.getElementById('materia').value.trim(),
-        justificacion: document.getElementById('justificacion').value.trim(),
         libros: recopilarLibros()
       };
 
@@ -678,6 +695,7 @@
     document.getElementById('resultadoValidacionBooky').className = 'mensaje';
 
     contadorLibros = 0;
+    programaKohaActual = '';
     agregarLibro();
 
     document.getElementById('confirmacion').classList.add('oculto');
