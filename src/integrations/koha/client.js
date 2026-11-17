@@ -282,16 +282,17 @@ async function searchPatronByCardnumber(config, rawCardnumber) {
     );
   }
 
+  // Koha REST filtra colecciones mediante el parámetro q (JSON).
+  // Enviar cardnumber como parámetro independiente puede ser ignorado por
+  // algunas versiones y terminar devolviendo usuarios que no corresponden.
   const data = await kohaGet(config, '/patrons', {
-    cardnumber,
-    _match: 'exact',
+    q: JSON.stringify({ cardnumber }),
     _per_page: 5,
     _page: 1
   });
 
-  // Koha ya aplica el filtro exacto en el servidor. No volvemos a exigir
-  // que cardnumber venga visible en el JSON, porque Koha puede redactar
-  // ese campo según la biblioteca/grupo de la cuenta técnica.
+  // Si Koha oculta cardnumber por permisos, confiamos en el filtro q aplicado
+  // en el servidor. Si el campo sí viene visible, exigimos igualdad exacta.
   const records = asArray(data).filter(record => {
     const returnedCardnumber = firstText(record?.cardnumber);
     return !returnedCardnumber ||

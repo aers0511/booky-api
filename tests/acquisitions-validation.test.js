@@ -5,7 +5,8 @@ const {
   validIssn,
   identifierStatus,
   scoreMatch,
-  summarizeHoldings
+  summarizeHoldings,
+  summarizeCampusHoldings
 } = require('../src/features/acquisitions/validate');
 
 test('valida ISBN-13', () => {
@@ -101,4 +102,20 @@ test('normaliza usuario Koha sin exponer datos personales adicionales', () => {
   });
   assert.equal('email' in patron, false);
   assert.equal('phone' in patron, false);
+});
+
+
+test('consolida cantidades por campus sin duplicar campus por ubicación o estado', () => {
+  const summary = summarizeCampusHoldings([
+    { campus: 'Guaymas', branchCode: 'GYM', status: 'Disponible según los datos actuales de Koha' },
+    { campus: 'Guaymas', branchCode: 'GYM', status: 'Prestado' },
+    { campus: 'Obregón Náinari', branchCode: 'NAI', status: 'Disponible según los datos actuales de Koha' },
+    { campus: 'Empalme', branchCode: 'EMPL', status: 'Registrado como extraviado' }
+  ]);
+
+  assert.equal(summary.find(item => item.branch_code === 'GYM').total, 2);
+  assert.equal(summary.find(item => item.branch_code === 'GYM').available, 1);
+  assert.equal(summary.find(item => item.branch_code === 'GYM').unavailable, 1);
+  assert.equal(summary.find(item => item.branch_code === 'NAI').campus, 'Náinari');
+  assert.equal(summary.find(item => item.branch_code === 'EMPL').campus, 'Empalme');
 });

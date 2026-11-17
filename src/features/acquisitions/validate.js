@@ -110,6 +110,43 @@ function dedupeRecords(records) {
  * Consolida los ejemplares por biblioteca, ubicación, clasificación y estado.
  * No elimina ejemplares repetidos: los cuenta en quantity.
  */
+function summarizeCampusHoldings(items = []) {
+  const campuses = new Map();
+  const names = {
+    NAI: 'Náinari',
+    CEN: 'Centro',
+    GYM: 'Guaymas',
+    NAV: 'Navojoa',
+    EMP: 'Empalme',
+    EMPL: 'Empalme',
+    BV: 'Biblioteca Virtual'
+  };
+
+  for (const item of items) {
+    const code = String(item.branchCode || '').trim().toUpperCase();
+    const key = code || String(item.campus || 'SIN_UBICACION');
+    const current = campuses.get(key) || {
+      branch_code: code || null,
+      campus: names[code] || item.campus || 'Ubicación no indicada',
+      total: 0,
+      available: 0,
+      unavailable: 0
+    };
+
+    current.total += 1;
+    if (String(item.status || '').toLowerCase().startsWith('disponible')) {
+      current.available += 1;
+    } else {
+      current.unavailable += 1;
+    }
+    campuses.set(key, current);
+  }
+
+  return [...campuses.values()].sort((a, b) =>
+    a.campus.localeCompare(b.campus, 'es')
+  );
+}
+
 function summarizeHoldings(items = []) {
   const groups = new Map();
 
@@ -205,8 +242,10 @@ async function validateBookAgainstCatalog(config, book) {
           url: record.url,
           match: record.match,
           total_items: (record.items || []).length,
+          campus_totals: summarizeCampusHoldings(record.items || []),
           holdings,
-          holdings_unavailable: Boolean(record.itemsUnavailable)
+          holdings_unavailable: Boolean(record.itemsUnavailable) ||
+            (record.items || []).length >= kohaConfig.maxItemsPerBiblio
         };
       })
     };
@@ -228,5 +267,6 @@ module.exports = {
   validIsbn,
   validIssn,
   scoreMatch,
-  summarizeHoldings
+  summarizeHoldings,
+  summarizeCampusHoldings
 };

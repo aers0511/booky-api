@@ -430,6 +430,8 @@
           return;
         }
 
+        const elementosLibro = Array.from(document.querySelectorAll('.libro'));
+
         respuesta.results.forEach(function(resultado, indice) {
           const tarjeta = document.createElement('div');
           tarjeta.style.cssText = 'padding:12px;margin:10px 0;border:1px solid #d8e0e8;border-radius:10px;background:#fff';
@@ -456,6 +458,70 @@
             : 0;
           cantidad.textContent = 'Coincidencias encontradas: ' + (encontrados || 0);
           tarjeta.appendChild(cantidad);
+
+          // Solo completar el formulario cuando Booky encontró al menos
+          // un registro bibliográfico relacionado en Koha.
+          const coincidencias = Array.isArray(resultado.matches)
+            ? resultado.matches : [];
+          const coincidencia = coincidencias[0];
+          const hayLibroEncontrado =
+            ['exact_match', 'possible_match'].includes(resultado.status) &&
+            coincidencia && elementosLibro[indice];
+
+          if (hayLibroEncontrado) {
+            const elementoLibro = elementosLibro[indice];
+            const campos = {
+              titulo: coincidencia.title,
+              autor: coincidencia.author,
+              editorial: coincidencia.publisher,
+              edicion: coincidencia.edition,
+              anio: coincidencia.year,
+              isbn: coincidencia.isbn
+            };
+
+            Object.keys(campos).forEach(function(clase) {
+              const valor = campos[clase];
+              if (valor !== null && valor !== undefined && String(valor).trim()) {
+                elementoLibro.querySelector('.' + clase).value = String(valor).trim();
+              }
+            });
+
+            const resumenCampus = Array.isArray(coincidencia.campus_totals)
+              ? coincidencia.campus_totals : [];
+            if (resumenCampus.length) {
+              const encabezadoCampus = document.createElement('strong');
+              encabezadoCampus.textContent = 'Ejemplares registrados por campus';
+              encabezadoCampus.style.display = 'block';
+              encabezadoCampus.style.marginTop = '10px';
+              tarjeta.appendChild(encabezadoCampus);
+
+              const listaCampus = document.createElement('ul');
+              listaCampus.style.cssText = 'margin:6px 0;padding-left:20px';
+              resumenCampus.forEach(function(campus) {
+                const elemento = document.createElement('li');
+                elemento.textContent = campus.campus + ': ' +
+                  campus.total + ' ejemplar(es), ' +
+                  campus.available + ' disponible(s), ' +
+                  campus.unavailable + ' no disponible(s)';
+                listaCampus.appendChild(elemento);
+              });
+              tarjeta.appendChild(listaCampus);
+            }
+
+            const avisoAutollenado = document.createElement('p');
+            avisoAutollenado.textContent =
+              'Se completaron los datos bibliográficos con el primer registro coincidente de Koha. Verifica que corresponda a la edición solicitada.';
+            avisoAutollenado.style.cssText = 'margin:6px 0;color:#176B47;font-size:13px';
+            tarjeta.appendChild(avisoAutollenado);
+
+            if (coincidencia.holdings_unavailable) {
+              const avisoLimite = document.createElement('p');
+              avisoLimite.textContent =
+                'La consulta de ejemplares pudo estar limitada; las cantidades por campus podrían ser parciales.';
+              avisoLimite.style.cssText = 'margin:5px 0;color:#8A5A00;font-size:13px';
+              tarjeta.appendChild(avisoLimite);
+            }
+          }
 
           if (Array.isArray(resultado.warnings)) {
             resultado.warnings.forEach(function(aviso) {
