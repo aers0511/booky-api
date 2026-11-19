@@ -23,8 +23,16 @@ function cleanBook(book, index) {
   }
   result.identifier_type = ['ISBN', 'ISSN', 'UNKNOWN'].includes(book.identifier_type)
     ? book.identifier_type : 'UNKNOWN';
-  result.quantities = book.quantities && typeof book.quantities === 'object' && !Array.isArray(book.quantities)
+  const rawQuantities = book.quantities && typeof book.quantities === 'object' && !Array.isArray(book.quantities)
     ? book.quantities : {};
+  result.quantities = {};
+  for (const campus of ['NAI', 'CEN', 'GYM', 'NAV', 'EMP', 'EMPL', 'BV']) {
+    const quantity = Number(rawQuantities[campus] ?? 0);
+    if (!Number.isFinite(quantity) || quantity < 0 || quantity > 100 || !Number.isInteger(quantity)) {
+      throw new Error(`La cantidad del campus ${campus} en el libro ${index + 1} debe ser un entero entre 0 y 100.`);
+    }
+    result.quantities[campus] = quantity;
+  }
   if (!result.title) throw new Error(`El libro ${index + 1} necesita un título.`);
   return result;
 }
@@ -75,12 +83,18 @@ module.exports = async function handler(req, res) {
       timeoutMs: Math.min(15000, config.http.requestTimeoutMs)
     });
 
-    const results = [];
-    for (let i = 0; i < books.length; i++) {
-      const original = books[i];
-      const normalizedBook = normalized[i];
-      const catalog = await validateBookAgainstCatalog(config, normalizedBook);
-      const warnings = [...normalizedBook.notes];
+    // Procesa pocos libros en paralelo: reduce el tiempo total sin lanzar
+    // todas las consultas simultáneamente contra Koha.
+    const results = new Array(books.length);
+    let nextIndex = 0;
+    const workerCount = Math.min(3, books.length);
+    await Promise.all(Array.from({ length: workerCount }, async () => {
+      while (nextIndex < books.length) {
+        const i = nextIndex++;
+        const original = books[i];
+        const normalizedBook = normalized[i];
+        const catalog = await validateBookAgainstCatalog(config, normalizedBook);
+        const warnings = [...normalizedBook.notes];
 
       if (catalog.status === 'exact_match') {
         warnings.push('Se encontró una coincidencia bibliográfica fuerte en el catálogo. Puedes solicitar ejemplares adicionales, pero se recomienda justificar la necesidad.');
@@ -92,7 +106,7 @@ module.exports = async function handler(req, res) {
         warnings.push('La validación del catálogo quedó pendiente. No se puede confirmar si el material existe.');
       }
 
-      results.push({
+        results[i] = {
         index: i,
         status: catalog.status,
         original: {
@@ -115,8 +129,9 @@ module.exports = async function handler(req, res) {
         },
         matches: catalog.matches,
         warnings
-      });
-    }
+        };
+      }
+    }));
 
     return send(res, 200, {
       success: true,

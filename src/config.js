@@ -44,7 +44,8 @@ function getConfig() {
       username: process.env.KOHA_API_USERNAME || '',
       password: process.env.KOHA_API_PASSWORD || '',
       timeoutMs: Number(process.env.KOHA_TIMEOUT_MS || 5000),
-      maxResults: Math.min(Math.max(Number(process.env.KOHA_MAX_RESULTS || 5), 1), 10),
+      maxResults: Math.min(Math.max(Number(process.env.KOHA_MAX_RESULTS || 10), 1), 50),
+      maxPages: Math.min(Math.max(Number(process.env.KOHA_MAX_PAGES || 3), 1), 5),
       maxItemsPerBiblio: Math.min(Math.max(Number(process.env.KOHA_MAX_ITEMS || 40), 1), 100)
     }
   };

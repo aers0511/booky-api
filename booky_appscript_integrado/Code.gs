@@ -9,8 +9,11 @@ const CONFIG = {
 
   // Agregar aquí los correos autorizados cuando estén disponibles.
   ADMIN_EMAILS: [
-  'jose.arrayales54814@potros.itson.edu.mx'
-],
+    'jose.arrayales54814@potros.itson.edu.mx',
+    'maria.tirado17734@potros.itson.edu.mx'
+    // TODO: agregar el correo correcto del tercer administrador; el valor
+    // original contenía una coma en el nombre de usuario y no era válido.
+  ],
 
   DOMAIN_ADMIN: '@potros.itson.edu.mx',
 

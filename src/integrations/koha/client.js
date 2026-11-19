@@ -179,66 +179,67 @@ async function searchBiblios(config, rawQuery, options = {}) {
     throw new KohaError('Escribe al menos dos caracteres para buscar.', 400, 'query_too_short');
   }
 
-  // Koha REST API utiliza filtros JSON en el parámetro q.
-  // Los campos se consultan con OR para ampliar coincidencias de título,
-  // autor e ISBN. Todas las operaciones del cliente son GET.
   const filter = [
     { title: { '-like': `%${query}%` } },
     { author: { '-like': `%${query}%` } },
     { isbn: { '-like': `%${query}%` } }
   ];
+  const perPage = Math.min(Math.max(Number(config.maxResults) || 10, 1), 50);
+  const maxPages = Math.min(Math.max(Number(config.maxPages) || 3, 1), 5);
+  let records = [];
+  let pagesFetched = 0;
 
-  let data;
-  try {
-    data = await kohaGet(config, '/biblios', {
-      q: JSON.stringify(filter),
-      _per_page: config.maxResults,
-      _page: 1
-    });
-  } catch (error) {
-    // Algunas instalaciones o personalizaciones no exponen todos los
-    // campos del objeto bibliográfico. Se intenta una búsqueda por título.
-    if (!(error instanceof KohaError) || error.status !== 400) throw error;
-
-    data = await kohaGet(config, '/biblios', {
-      q: JSON.stringify({ title: { '-like': `%${query}%` } }),
-      _per_page: config.maxResults,
-      _page: 1
-    });
-  }
-
-  const records = asArray(data).slice(0, config.maxResults);
-  const biblios = records.map(record => normalizeBiblio(record, config.baseUrl));
-
-  // Recupera ejemplares con concurrencia limitada para no saturar Koha.
-  // El endpoint de adquisiciones puede solicitar primero solo bibliografía
-  // y recuperar ejemplares únicamente para coincidencias relevantes.
-  if (options.includeItems === false) {
-    return {
-      query,
-      totalReturned: biblios.length,
-      results: biblios
-    };
-  }
-
-  const enriched = await Promise.all(biblios.map(async biblio => {
+  for (let page = 1; page <= maxPages; page++) {
+    let data;
     try {
-      const items = await getItems(config, biblio.biblioId);
-      return { ...biblio, items };
+      data = await kohaGet(config, '/biblios', {
+        q: JSON.stringify(filter),
+        _per_page: perPage,
+        _page: page
+      });
     } catch (error) {
-      return {
-        ...biblio,
-        items: [],
-        itemsUnavailable: true
-      };
+      if (page !== 1 || !(error instanceof KohaError) || error.status !== 400) throw error;
+      // Compatibilidad con instalaciones que no admiten OR entre campos.
+      data = await kohaGet(config, '/biblios', {
+        q: JSON.stringify({ title: { '-like': `%${query}%` } }),
+        _per_page: perPage,
+        _page: page
+      });
+    }
+    const batch = asArray(data);
+    pagesFetched++;
+    records.push(...batch);
+    if (batch.length < perPage) break;
+  }
+
+  const biblios = records.map(record => normalizeBiblio(record, config.baseUrl));
+  const unique = [...new Map(biblios.map(record => [
+    String(record.biblioId || `${record.title}|${record.author}|${record.isbn}`), record
+  ])).values()];
+
+  if (options.includeItems === false) {
+    return { query, totalReturned: unique.length, pagesFetched, results: unique };
+  }
+
+  // Limita la concurrencia para evitar saturar la API REST de Koha.
+  const queue = unique;
+  const enriched = new Array(queue.length);
+  let cursor = 0;
+  const workerCount = Math.min(4, queue.length);
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (cursor < queue.length) {
+      const index = cursor++;
+      const biblio = queue[index];
+      try {
+        const items = await getItems(config, biblio.biblioId);
+        enriched[index] = { ...biblio, items };
+      } catch {
+        enriched[index] = { ...biblio, items: [], itemsUnavailable: true };
+      }
     }
   }));
 
-  return {
-    query,
-    totalReturned: enriched.length,
-    results: enriched
-  };
+  return { query, totalReturned: enriched.length, pagesFetched, results: enriched };
 }
 
 function normalizePatron(record, searchedCardnumber = '') {

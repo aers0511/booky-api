@@ -373,3 +373,30 @@ Si el frontend no utiliza Google Apps Script, aplica el mismo patrón con tu bac
 8. Cuando el sistema de solicitudes tenga una operación de guardado, envía también el `borrowernumber` seleccionado para asociar la solicitud.
 
 **Alcance actual:** estos endpoints buscan usuarios y validan libros; no crean ni guardan solicitudes de adquisición. El `borrowernumber` se conserva en el frontend para relacionarlo cuando exista un endpoint de registro. No debe confundirse la validación bibliográfica con la autorización o aprobación de una compra.
+
+
+## Actualización 2.1.0 (19-11-2026)
+
+### Cambios incluidos
+- La validación de adquisiciones ya no selecciona ni completa automáticamente la primera coincidencia de Koha. El docente debe elegir explícitamente el registro bibliográfico en cada libro.
+- El selector muestra título, autor, edición, año, ISBN y número de registro cuando están disponibles. La elección confirmada actualiza los datos bibliográficos y el resumen de existencias de ese libro.
+- Si se modifica la captura después de validar, se limpian las existencias consultadas para evitar mostrar datos desactualizados.
+- La búsqueda de biblios pagina hasta `KOHA_MAX_PAGES` páginas, con límites configurables y eliminación de registros duplicados.
+- La recuperación de ejemplares usa concurrencia limitada.
+- La validación de adquisiciones procesa hasta tres libros en paralelo para reducir el tiempo sin saturar Koha.
+- Se amplió a diez el máximo de coincidencias que pueden mostrarse con existencias en el módulo de adquisiciones.
+- Se añadió estilo para el selector bibliográfico. Se retiró de la lista administrativa una dirección malformada que contenía una coma; hay que confirmar y volver a agregar el correo correcto del tercer administrador antes de desplegar.
+- Se validan cantidades por campus como enteros de 0 a 100 y se descartan propiedades de campus no permitidas.
+
+### Configuración nueva
+`KOHA_MAX_PAGES=3` controla cuántas páginas se consultan por búsqueda bibliográfica. El valor permitido por el backend está limitado de 1 a 5. Cada página usa `KOHA_MAX_RESULTS` (limitado de 1 a 50). Esto reduce, pero no elimina, la posibilidad de que existan registros más allá del límite configurado.
+
+### Despliegue
+1. Actualiza los archivos de Vercel con el contenido de `src/`, `api/`, `package.json` y `vercel.json`.
+2. Conserva las variables secretas existentes en Vercel; no copies claves reales al repositorio. Agrega `KOHA_MAX_PAGES=3` si deseas configurar explícitamente la paginación.
+3. En Apps Script, actualiza `Index.html` y `Styles.html`. `Code.gs` también contiene la corrección de formato de la lista administrativa; confirma primero el correo indicado en `ADMIN_EMAILS`.
+4. Ejecuta `npm test` y despliega una nueva versión de Apps Script.
+5. Prueba con títulos duplicados, ediciones distintas, un ISBN exacto, un título sin autor y un libro sin coincidencias. Verifica además que los totales por campus coincidan con Koha.
+
+### Límites de validación
+Las pruebas automatizadas no sustituyen una prueba autenticada con la instancia productiva de Koha ni con las credenciales de Vercel/Apps Script. La paginación depende de que la instalación Koha soporte `_page` y `_per_page` en el endpoint `/biblios`. Las existencias siguen siendo una consulta informativa y pueden cambiar después de la validación.

@@ -1,6 +1,6 @@
-
 <!DOCTYPE html>
 <html>
+
 <head>
   <base target="_top">
   <?!= include('Styles'); ?>
@@ -27,12 +27,12 @@
         <div class="rejilla">
 
           <div class="campo busqueda-profesor" style="grid-column:1 / -1">
-            <label for="cardnumber">Número de tarjeta del profesor *</label>
+            <label for="cardnumber">ID del solicitante *</label>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <input id="cardnumber" name="cardnumber"
                      type="text" required maxlength="64"
                      autocomplete="off"
-                     placeholder="Ingresa el número de tarjeta"
+                     placeholder="Ingresa el ID del solicitante"
                      style="flex:1;min-width:220px">
               <button id="btnBuscarProfesor" type="button"
                       class="boton boton-secundario"
@@ -40,14 +40,14 @@
                 Buscar en Koha
               </button>
             </div>
-            <p id="estadoBusquedaProfesor" class="estado-busqueda texto-ayuda"
-               aria-live="polite">Busca al profesor para completar sus datos.</p>
+            <p id="estadoBusquedaProfesor" class="estado-busqueda texto-ayuda" aria-live="polite">Busca al profesor para
+              completar sus datos.</p>
             <input id="borrowernumber" type="hidden" value="">
             <input id="cardnumberConfirmado" type="hidden" value="">
           </div>
 
           <div class="campo">
-            <label for="solicitante">Nombre del profesor *</label>
+            <label for="solicitante">Nombre del solicitante *</label>
             <input id="solicitante" name="solicitante"
                    type="text" required readonly
                    placeholder="Se completará al encontrarlo en Koha">
@@ -74,15 +74,6 @@
 
         <div id="listaLibros"></div>
 
-        <div class="acciones" style="margin-top:14px">
-          <button id="btnValidarLibros" type="button"
-                  class="boton boton-secundario"
-                  onclick="validarLibrosEnBooky()">
-            Validar libros en catálogo con Booky
-          </button>
-        </div>
-        <div id="resultadoValidacionBooky" class="mensaje"
-             aria-live="polite" style="margin-top:12px"></div>
 
         <div class="acciones">
           <button type="button" class="boton boton-secundario"
@@ -90,6 +81,20 @@
             + Agregar otro libro
           </button>
         </div>
+
+        <div class="acciones-validacion">
+          <div class="acciones-validacion-info">
+            <strong>Validación del catálogo</strong>
+            <p class="texto-ayuda">Consulta todos los libros registrados y revisa sus coincidencias y ejemplares por campus.</p>
+          </div>
+          <button id="btnValidarLibros" type="button"
+                  class="boton boton-secundario"
+                  onclick="validarLibrosEnBooky()">
+            Validar todos los libros con Booky
+          </button>
+        </div>
+
+        <div id="resultadoValidacionBooky" class="mensaje" aria-live="polite" style="margin-top:12px"></div>
 
       </section>
 
@@ -133,8 +138,8 @@
   </footer>
 
 
-<script>
-  const CAMPUS = [
+  <script>
+    const CAMPUS = [
     'Centro',
     'Náinari',
     'Guaymas',
@@ -144,6 +149,10 @@
 
   let contadorLibros = 0;
   let programaKohaActual = '';
+  let consultaProfesorId = 0;
+  let versionLibros = 0;
+  let solicitudEnCurso = false;
+  let validacionEnCurso = false;
 
   function agregarLibro() {
     contadorLibros++;
@@ -156,14 +165,22 @@
 
     contenedor.innerHTML = `
       <div class="libro-encabezado">
-        <h3>Libro ${numero}</h3>
+        <button type="button" class="libro-toggle"
+                aria-expanded="true"
+                aria-controls="contenidoLibro${numero}"
+                onclick="alternarLibro(${numero})">
+          <span class="libro-toggle-icono" aria-hidden="true">−</span>
+          <span class="libro-titulo">Libro ${numero}</span>
+          <span class="libro-resumen"></span>
+        </button>
         <button type="button"
-                class="boton boton-secundario"
+                class="boton boton-secundario libro-quitar"
                 onclick="eliminarLibro(${numero})">
           Quitar
         </button>
       </div>
 
+      <div class="libro-contenido" id="contenidoLibro${numero}">
       <div class="rejilla">
 
         <div class="campo">
@@ -227,26 +244,87 @@
         Cantidades por campus
       </h3>
 
-      <div class="cantidades">
+    
+      <div class="rejilla cantidades-campus">
         ${CAMPUS.map((campus, indice) => `
           <div class="campo cantidad">
             <label>${campus}</label>
-            <input type="number" min="0" step="1"
-                   value="0" class="cantidad-campus"
+
+            <small>Disponibles en biblioteca</small>
+            <input type="number"
+                   class="existencia-campus"
+                   data-campus="${indice}"
+                   readonly
+                   placeholder="Sin validar">
+
+            <small>Cantidad que solicita</small>
+            <input type="number"
+                   min="0"
+                   step="1"
+                   value="0"
+                   class="cantidad-campus"
                    data-campus="${indice}">
           </div>
         `).join('')}
       </div>
 
+      </div>
+
       <p class="texto-ayuda">
         Indica al menos un ejemplar en alguno de los campus.
       </p>
+      </div>
     `;
 
     document.getElementById('listaLibros').appendChild(contenedor);
+    versionLibros++;
     if (programaKohaActual) {
       contenedor.querySelector('.programa').value = programaKohaActual;
     }
+
+    // Actualiza el resumen del libro conforme se captura el título.
+    const campoTitulo = contenedor.querySelector('.titulo');
+    campoTitulo.addEventListener('input', () => actualizarResumenLibro(contenedor));
+    actualizarResumenLibro(contenedor);
+
+    // El primer libro inicia abierto; los siguientes se agregan contraídos.
+    if (numero > 1) contraerLibro(contenedor);
+  }
+
+
+  function actualizarResumenLibro(contenedor) {
+    const titulo = contenedor.querySelector('.titulo')?.value.trim();
+    const resumen = contenedor.querySelector('.libro-resumen');
+    if (resumen) resumen.textContent = titulo || 'Sin título capturado';
+  }
+
+  function alternarLibro(numero) {
+    const elemento = document.querySelector('[data-libro="' + numero + '"]');
+    if (!elemento) return;
+
+    const estaContraido = elemento.classList.contains('libro-contraido');
+    if (estaContraido) {
+      elemento.classList.remove('libro-contraido');
+      elemento.querySelector('.libro-toggle')?.setAttribute('aria-expanded', 'true');
+      const icono = elemento.querySelector('.libro-toggle-icono');
+      if (icono) icono.textContent = '−';
+    } else {
+      contraerLibro(elemento);
+    }
+  }
+
+  function contraerLibro(elemento) {
+    elemento.classList.add('libro-contraido');
+    elemento.querySelector('.libro-toggle')?.setAttribute('aria-expanded', 'false');
+    const icono = elemento.querySelector('.libro-toggle-icono');
+    if (icono) icono.textContent = '+';
+  }
+
+  function expandirLibro(elemento) {
+    elemento.classList.remove('libro-contraido');
+    elemento.querySelector('.libro-toggle')?.setAttribute('aria-expanded', 'true');
+    const icono = elemento.querySelector('.libro-toggle-icono');
+    if (icono) icono.textContent = '−';
   }
 
 
@@ -265,7 +343,7 @@
       '[data-libro="' + numero + '"]'
     );
 
-    if (elemento) elemento.remove();
+    if (elemento) { elemento.remove(); versionLibros++; invalidarResultadosBooky(); }
   }
 
 
@@ -328,12 +406,8 @@
   }
 
   function limpiarSolicitanteConfirmado() {
-    const programaAnterior = programaKohaActual;
-    if (programaAnterior) {
-      document.querySelectorAll('.libro .programa').forEach(function(campo) {
-        if (campo.value.trim() === programaAnterior) campo.value = '';
-      });
-    }
+    // Invalida cualquier respuesta pendiente de una búsqueda anterior.
+    consultaProfesorId++;
     programaKohaActual = '';
     document.getElementById('solicitante').value = '';
     document.getElementById('borrowernumber').value = '';
@@ -350,41 +424,37 @@
       campoTarjeta.focus();
       return;
     }
+    if (boton.disabled) return;
 
+    limpiarSolicitanteConfirmado();
+    const identificador = consultaProfesorId;
     boton.disabled = true;
     boton.textContent = 'Buscando...';
-    limpiarSolicitanteConfirmado();
     establecerEstadoBusqueda('Consultando usuarios en Koha...', 'cargando');
 
     google.script.run
       .withSuccessHandler(function(respuesta) {
+        // Ignora respuestas tardías si el usuario cambió la tarjeta.
+        if (identificador !== consultaProfesorId || campoTarjeta.value.trim() !== cardnumber) return;
         boton.disabled = false;
         boton.textContent = 'Buscar en Koha';
 
-        if (!respuesta || respuesta.success === false ||
-            respuesta.found === false ||
-            !Array.isArray(respuesta.results) || respuesta.results.length === 0) {
-          establecerEstadoBusqueda(
-            'No se encontró un usuario con ese número de tarjeta.',
-            'error'
-          );
+        if (!respuesta || respuesta.success === false || respuesta.found === false || !Array.isArray(respuesta.results)) {
+          establecerEstadoBusqueda('Koha no pudo completar la búsqueda. Intenta nuevamente.', 'error');
           return;
         }
-
+        if (respuesta.results.length === 0) {
+          establecerEstadoBusqueda('No encontramos un usuario con ese número de tarjeta.', 'error');
+          return;
+        }
         if (respuesta.results.length !== 1) {
-          establecerEstadoBusqueda(
-            'Koha devolvió más de un resultado. No se puede confirmar una identidad única; contacta a Bibliotecas.',
-            'error'
-          );
+          establecerEstadoBusqueda('Se encontraron varios usuarios. No se confirmó la identidad; contacta a Bibliotecas.', 'error');
           return;
         }
 
         const usuario = respuesta.results[0];
         if (!usuario.borrowernumber || !usuario.cardnumber || !usuario.full_name) {
-          establecerEstadoBusqueda(
-            'Koha devolvió datos incompletos para este usuario.',
-            'error'
-          );
+          establecerEstadoBusqueda('Koha devolvió datos incompletos para este usuario.', 'error');
           return;
         }
 
@@ -399,194 +469,338 @@
             if (!campo.value.trim()) campo.value = programaKohaActual;
           });
         }
-
-        const sucursal = usuario.branchcode
-          ? ' · Sucursal: ' + usuario.branchcode
-          : '';
-
-        establecerEstadoBusqueda(
-          'Usuario encontrado: ' + usuario.full_name + sucursal,
-          'exito'
-        );
+        establecerEstadoBusqueda('Solicitante identificado: ' + usuario.full_name +
+          (usuario.branchcode ? ' · Sucursal: ' + usuario.branchcode : ''), 'exito');
       })
       .withFailureHandler(function(error) {
+        if (identificador !== consultaProfesorId) return;
         boton.disabled = false;
         boton.textContent = 'Buscar en Koha';
-        establecerEstadoBusqueda(
-          error && error.message
-            ? error.message
-            : 'No fue posible consultar Booky API.',
-          'error'
-        );
+        establecerEstadoBusqueda(error?.message || 'No fue posible consultar Koha. Intenta nuevamente.', 'error');
       })
       .buscarSolicitante(cardnumber);
   }
 
+  function invalidarResultadosBooky() {
+    // Las existencias consultadas dejan de ser confiables cuando cambia la captura.
+    document.querySelectorAll('.existencia-campus').forEach(campo => {
+      campo.value = '';
+      campo.placeholder = 'Sin validar';
+      campo.title = '';
+    });
+    const contenedor = document.getElementById('resultadoValidacionBooky');
+    if (contenedor && contenedor.textContent.trim()) {
+      contenedor.textContent = 'La captura de libros cambió. Vuelve a validar para actualizar los resultados.';
+      contenedor.className = 'mensaje advertencia';
+    }
+  }
+
+  function aplicarCoincidenciaSeleccionada(elementoLibro, coincidencia, tarjeta) {
+    const campos = {
+      titulo: coincidencia.title,
+      autor: coincidencia.author,
+      editorial: coincidencia.publisher,
+      edicion: coincidencia.edition,
+      anio: coincidencia.year,
+      isbn: coincidencia.isbn
+    };
+    let completados = 0;
+    Object.entries(campos).forEach(([clase, valor]) => {
+      const campo = elementoLibro.querySelector('.' + clase);
+      if (campo && valor !== null && valor !== undefined && String(valor).trim()) {
+        // La selección explícita del docente confirma qué registro usar.
+        campo.value = String(valor).trim();
+        completados++;
+      }
+    });
+    actualizarResumenLibro(elementoLibro);
+
+    elementoLibro.querySelectorAll('.existencia-campus').forEach(campo => {
+      campo.value = '';
+      campo.placeholder = 'Sin validar';
+      campo.title = '';
+    });
+
+    const campusPorNombre = {
+      'CENTRO': 0, 'OBREGON CENTRO': 0,
+      'NAINARI': 1, 'OBREGON NAINARI': 1,
+      'GUAYMAS': 2, 'NAVOJOA': 3, 'EMPALME': 4
+    };
+    const resumen = document.createElement('div');
+    const tituloCampus = document.createElement('strong');
+    tituloCampus.textContent = 'Existencias registradas en Koha por campus';
+    resumen.appendChild(tituloCampus);
+    const lista = document.createElement('ul');
+    const totales = Array.isArray(coincidencia.campus_totals) ? coincidencia.campus_totals : [];
+
+    totales.forEach(campus => {
+      const nombre = String(campus.campus || '').trim().normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '').toUpperCase();
+      const indice = campusPorNombre[nombre];
+      const disponibles = Number(campus.available || 0);
+      const total = Number(campus.total || 0);
+      const noDisponibles = Number(campus.unavailable || 0);
+      if (indice !== undefined) {
+        const campo = elementoLibro.querySelector('.existencia-campus[data-campus="' + indice + '"]');
+        if (campo) {
+          campo.value = String(disponibles);
+          campo.title = total + ' ejemplares totales; ' + noDisponibles + ' no disponibles';
+        }
+      }
+      const li = document.createElement('li');
+      li.textContent = String(campus.campus || 'Campus') + ': ' + total + ' total, ' +
+        disponibles + ' disponibles, ' + noDisponibles + ' no disponibles';
+      lista.appendChild(li);
+    });
+    resumen.appendChild(lista);
+    tarjeta.appendChild(resumen);
+
+    const confirmacion = document.createElement('p');
+    confirmacion.className = 'resultado-autollenado';
+    confirmacion.textContent = 'Registro seleccionado. Se actualizaron ' + completados +
+      ' campos bibliográficos. Verifica la edición y las existencias antes de enviar.';
+    tarjeta.appendChild(confirmacion);
+
+    if (coincidencia.holdings_unavailable) {
+      const aviso = document.createElement('p');
+      aviso.className = 'resultado-advertencia';
+      aviso.textContent = 'La consulta de ejemplares fue parcial o no estuvo disponible; las existencias pueden estar incompletas.';
+      tarjeta.appendChild(aviso);
+    }
+  }
+
   function validarLibrosEnBooky() {
+    const elementosLibro = Array.from(document.querySelectorAll('.libro'));
     const libros = recopilarLibros();
     const boton = document.getElementById('btnValidarLibros');
     const contenedor = document.getElementById('resultadoValidacionBooky');
 
+    if (validacionEnCurso) return;
     if (!libros.length) {
       contenedor.textContent = 'Agrega al menos un libro para validarlo.';
       contenedor.className = 'mensaje error';
       return;
     }
+    const incompleto = libros.findIndex(libro => !libro.titulo);
+    if (incompleto !== -1) {
+      expandirLibro(elementosLibro[incompleto]);
+      elementosLibro[incompleto].querySelector('.titulo').focus();
+      contenedor.textContent = 'Completa el título de cada libro antes de validar el catálogo.';
+      contenedor.className = 'mensaje advertencia';
+      return;
+    }
 
+    validacionEnCurso = true;
+    const versionConsultada = versionLibros;
     boton.disabled = true;
     boton.textContent = 'Validando...';
-    contenedor.textContent = 'Booky está normalizando los datos y consultando el catálogo Koha...';
-    contenedor.className = 'mensaje';
+    contenedor.textContent = 'Booky está consultando el catálogo Koha. Puedes continuar revisando, pero los cambios requerirán una nueva validación.';
+    contenedor.className = 'mensaje estado-cargando visible';
 
     google.script.run
       .withSuccessHandler(function(respuesta) {
+        validacionEnCurso = false;
         boton.disabled = false;
-        boton.textContent = 'Validar libros en catálogo con Booky';
-        contenedor.innerHTML = '';
+        boton.textContent = 'Validar todos los libros con Booky';
 
+        if (versionConsultada !== versionLibros) {
+          contenedor.textContent = 'Los libros cambiaron durante la consulta. No se aplicaron resultados; vuelve a validar.';
+          contenedor.className = 'mensaje advertencia';
+          return;
+        }
         if (!respuesta || !Array.isArray(respuesta.results)) {
-          contenedor.textContent = 'Booky no devolvió resultados de validación.';
+          contenedor.textContent = 'Booky no devolvió resultados válidos. Verifica la conexión e inténtalo nuevamente.';
+          contenedor.className = 'mensaje error';
+          return;
+        }
+        if (respuesta.results.length !== elementosLibro.length) {
+          contenedor.textContent = 'La cantidad de resultados no coincide con los libros enviados. No se modificó ningún dato; vuelve a intentar.';
           contenedor.className = 'mensaje error';
           return;
         }
 
-        const elementosLibro = Array.from(document.querySelectorAll('.libro'));
+        contenedor.replaceChildren();
+        let exactos = 0, posibles = 0, noEncontrados = 0, errores = 0;
 
         respuesta.results.forEach(function(resultado, indice) {
           const tarjeta = document.createElement('div');
-          tarjeta.style.cssText = 'padding:12px;margin:10px 0;border:1px solid #d8e0e8;border-radius:10px;background:#fff';
-
-          const titulo = document.createElement('strong');
-          titulo.textContent = (indice + 1) + '. ' +
-            ((resultado.original && resultado.original.title) || 'Libro sin título');
-          tarjeta.appendChild(titulo);
+          tarjeta.className = 'resultado-libro';
+          const tituloOriginal = resultado.original?.title || libros[indice].titulo || ('Libro ' + (indice + 1));
+          const encabezado = document.createElement('strong');
+          encabezado.textContent = (indice + 1) + '. ' + tituloOriginal;
+          tarjeta.appendChild(encabezado);
 
           const estado = document.createElement('p');
           const estados = {
-            exact_match: 'Coincidencia fuerte en el catálogo',
-            possible_match: 'Se encontraron coincidencias posibles',
-            not_found: 'No se encontraron coincidencias',
+            exact_match: 'Coincidencia exacta o fuerte en el catálogo',
+            possible_match: 'Se encontraron posibles coincidencias; requieren revisión',
+            not_found: 'No se encontraron coincidencias en el catálogo',
             pending: 'Validación pendiente'
           };
-          estado.textContent = estados[resultado.status] || 'Resultado no identificado';
-          estado.style.margin = '6px 0';
+          estado.textContent = estados[resultado.status] || 'No fue posible determinar el resultado';
           tarjeta.appendChild(estado);
 
+          const coincidencias = Array.isArray(resultado.matches) ? resultado.matches : [];
+          const elementoLibro = elementosLibro[indice];
           const cantidad = document.createElement('p');
-          const encontrados = resultado.validation
-            ? resultado.validation.matches_found
-            : 0;
-          cantidad.textContent = 'Coincidencias encontradas: ' + (encontrados || 0);
+          cantidad.textContent = 'Registros relacionados encontrados: ' + coincidencias.length +
+            (resultado.validation?.matches_found > coincidencias.length
+              ? ' (se muestran los más relevantes; puede haber más resultados).' : '.');
           tarjeta.appendChild(cantidad);
 
-          // Solo completar el formulario cuando Booky encontró al menos
-          // un registro bibliográfico relacionado en Koha.
-          const coincidencias = Array.isArray(resultado.matches)
-            ? resultado.matches : [];
-          const coincidencia = coincidencias[0];
-          const hayLibroEncontrado =
-            ['exact_match', 'possible_match'].includes(resultado.status) &&
-            coincidencia && elementosLibro[indice];
+          if (coincidencias.length) {
+            if (resultado.status === 'exact_match') exactos++;
+            else posibles++;
 
-          if (hayLibroEncontrado) {
-            const elementoLibro = elementosLibro[indice];
-            const campos = {
-              titulo: coincidencia.title,
-              autor: coincidencia.author,
-              editorial: coincidencia.publisher,
-              edicion: coincidencia.edition,
-              anio: coincidencia.year,
-              isbn: coincidencia.isbn
-            };
+            const instruccion = document.createElement('p');
+            instruccion.className = 'resultado-advertencia';
+            instruccion.textContent = coincidencias.length > 1
+              ? 'Se encontraron varios registros. Selecciona el libro correcto; Booky no elegirá uno automáticamente.'
+              : 'Confirma que este registro corresponde al material solicitado antes de utilizarlo.';
+            tarjeta.appendChild(instruccion);
 
-            Object.keys(campos).forEach(function(clase) {
-              const valor = campos[clase];
-              if (valor !== null && valor !== undefined && String(valor).trim()) {
-                elementoLibro.querySelector('.' + clase).value = String(valor).trim();
-              }
+            const selector = document.createElement('select');
+            selector.className = 'selector-coincidencia';
+            selector.setAttribute('aria-label', 'Seleccionar registro bibliográfico');
+            const opcionInicial = document.createElement('option');
+            opcionInicial.value = '';
+            opcionInicial.textContent = 'Selecciona el registro correcto…';
+            selector.appendChild(opcionInicial);
+
+            coincidencias.forEach((registro, posicion) => {
+              const opcion = document.createElement('option');
+              opcion.value = String(posicion);
+              const datos = [registro.title, registro.author, registro.edition,
+                registro.year, registro.isbn ? 'ISBN ' + registro.isbn : '',
+                registro.biblio_id ? 'Koha #' + registro.biblio_id : ''].filter(Boolean);
+              opcion.textContent = (posicion + 1) + '. ' + datos.join(' · ');
+              selector.appendChild(opcion);
             });
+            tarjeta.appendChild(selector);
 
-            const resumenCampus = Array.isArray(coincidencia.campus_totals)
-              ? coincidencia.campus_totals : [];
-            if (resumenCampus.length) {
-              const encabezadoCampus = document.createElement('strong');
-              encabezadoCampus.textContent = 'Ejemplares registrados por campus';
-              encabezadoCampus.style.display = 'block';
-              encabezadoCampus.style.marginTop = '10px';
-              tarjeta.appendChild(encabezadoCampus);
+            const detalle = document.createElement('div');
+            detalle.className = 'detalle-coincidencia texto-ayuda';
+            detalle.textContent = 'La selección actualizará los datos bibliográficos y las existencias de este libro.';
+            tarjeta.appendChild(detalle);
 
-              const listaCampus = document.createElement('ul');
-              listaCampus.style.cssText = 'margin:6px 0;padding-left:20px';
-              resumenCampus.forEach(function(campus) {
-                const elemento = document.createElement('li');
-                elemento.textContent = campus.campus + ': ' +
-                  campus.total + ' ejemplar(es), ' +
-                  campus.available + ' disponible(s), ' +
-                  campus.unavailable + ' no disponible(s)';
-                listaCampus.appendChild(elemento);
+            const botonSeleccionar = document.createElement('button');
+            botonSeleccionar.type = 'button';
+            botonSeleccionar.className = 'boton boton-secundario';
+            botonSeleccionar.textContent = 'Usar este registro';
+            botonSeleccionar.disabled = true;
+            selector.addEventListener('change', function() {
+              botonSeleccionar.disabled = selector.value === '';
+              const elegido = selector.value === '' ? null : coincidencias[Number(selector.value)];
+              detalle.textContent = elegido
+                ? ['Título: ' + (elegido.title || 'No disponible'),
+                   'Autor: ' + (elegido.author || 'No disponible'),
+                   'Editorial: ' + (elegido.publisher || 'No disponible'),
+                   'Edición: ' + (elegido.edition || 'No disponible'),
+                   'Año: ' + (elegido.year || 'No disponible'),
+                   'ISBN: ' + (elegido.isbn || 'No disponible'),
+                   'Registro Koha: ' + (elegido.biblio_id || 'No disponible')].join(' | ')
+                : 'La selección actualizará los datos bibliográficos y las existencias de este libro.';
+            });
+            botonSeleccionar.addEventListener('click', function() {
+              if (selector.value === '') return;
+              const elegido = coincidencias[Number(selector.value)];
+              if (!elegido) return;
+              tarjeta.querySelectorAll('.resultado-autollenado').forEach(n => n.remove());
+              tarjeta.querySelectorAll('.resultado-advertencia').forEach((n, i) => {
+                if (i > 0) n.remove();
               });
-              tarjeta.appendChild(listaCampus);
-            }
-
-            const avisoAutollenado = document.createElement('p');
-            avisoAutollenado.textContent =
-              'Se completaron los datos bibliográficos con el primer registro coincidente de Koha. Verifica que corresponda a la edición solicitada.';
-            avisoAutollenado.style.cssText = 'margin:6px 0;color:#176B47;font-size:13px';
-            tarjeta.appendChild(avisoAutollenado);
-
-            if (coincidencia.holdings_unavailable) {
-              const avisoLimite = document.createElement('p');
-              avisoLimite.textContent =
-                'La consulta de ejemplares pudo estar limitada; las cantidades por campus podrían ser parciales.';
-              avisoLimite.style.cssText = 'margin:5px 0;color:#8A5A00;font-size:13px';
-              tarjeta.appendChild(avisoLimite);
-            }
-          }
-
-          if (Array.isArray(resultado.warnings)) {
-            resultado.warnings.forEach(function(aviso) {
-              const nota = document.createElement('p');
-              nota.textContent = aviso;
-              nota.style.cssText = 'margin:5px 0;color:#5b6470;font-size:13px';
-              tarjeta.appendChild(nota);
+              tarjeta.querySelectorAll('ul').forEach(n => n.parentElement.remove());
+              aplicarCoincidenciaSeleccionada(elementoLibro, elegido, tarjeta);
+              selector.disabled = true;
+              botonSeleccionar.disabled = true;
+              botonSeleccionar.textContent = 'Registro seleccionado';
             });
+            tarjeta.appendChild(botonSeleccionar);
+          } else if (resultado.status === 'not_found') {
+            noEncontrados++;
+            const aviso = document.createElement('p');
+            aviso.textContent = 'No se encontraron registros relacionados. Puedes continuar; el personal bibliotecario deberá revisar la solicitud.';
+            tarjeta.appendChild(aviso);
+          } else {
+            errores++;
           }
 
+          if (Array.isArray(resultado.warnings)) resultado.warnings.forEach(aviso => {
+            const nota = document.createElement('p');
+            nota.className = 'texto-ayuda';
+            nota.textContent = String(aviso);
+            tarjeta.appendChild(nota);
+          });
           contenedor.appendChild(tarjeta);
         });
 
-        const notaFinal = document.createElement('p');
-        notaFinal.textContent =
-          'Esta validación es orientativa. Puedes enviar la solicitud aunque existan coincidencias; la revisión final corresponde al personal bibliotecario.';
-        contenedor.appendChild(notaFinal);
+        const resumen = document.createElement('p');
+        resumen.textContent = 'Resumen: ' + exactos + ' coincidencia(s) fuerte(s), ' + posibles +
+          ' por revisar, ' + noEncontrados + ' sin resultados y ' + errores + ' pendiente(s) o con error.';
+        contenedor.appendChild(resumen);
+        const nota = document.createElement('p');
+        nota.className = 'texto-ayuda';
+        nota.textContent = 'Las existencias mostradas provienen del catálogo y no modifican las cantidades solicitadas. Puedes enviar la solicitud aunque un libro no aparezca en Koha.';
+        contenedor.appendChild(nota);
         contenedor.className = 'mensaje exito';
       })
       .withFailureHandler(function(error) {
+        validacionEnCurso = false;
         boton.disabled = false;
-        boton.textContent = 'Validar libros en catálogo con Booky';
-        contenedor.textContent = error && error.message
-          ? error.message
-          : 'No fue posible validar los libros con Booky.';
+        boton.textContent = 'Validar todos los libros con Booky';
+        contenedor.textContent = error?.message || 'No fue posible validar los libros con Booky. Conservamos tu captura; puedes intentarlo nuevamente.';
         contenedor.className = 'mensaje error';
       })
       .validarLibrosBooky(libros);
   }
 
-  document.getElementById('cardnumber')
-    .addEventListener('input', function() {
-      limpiarSolicitanteConfirmado();
-      establecerEstadoBusqueda(
-        'El número cambió. Vuelve a buscarlo en Koha.',
-        'pendiente'
-      );
-    });
+ const campoTarjeta = document.getElementById('cardnumber');
+
+// Detectar cuando cambia el número de tarjeta.
+campoTarjeta.addEventListener('input', function() {
+  limpiarSolicitanteConfirmado();
+
+  const boton = document.getElementById('btnBuscarProfesor');
+  boton.disabled = false;
+  boton.textContent = 'Buscar en Koha';
+
+  establecerEstadoBusqueda(
+    'El número cambió. Vuelve a buscarlo en Koha.',
+    'pendiente'
+  );
+});
+
+// Buscar automáticamente al presionar Enter.
+campoTarjeta.addEventListener('keydown', function(evento) {
+  if (evento.key === 'Enter') {
+    evento.preventDefault();
+    consultarSolicitante();
+  }
+});
+
+  document.getElementById('listaLibros').addEventListener('input', function(evento) {
+    if (evento.target.matches('input, textarea, select')) {
+      versionLibros++;
+      invalidarResultadosBooky();
+    }
+  });
 
   document.getElementById('formulario')
     .addEventListener('submit', function(evento) {
 
       evento.preventDefault();
+      if (solicitudEnCurso) return;
 
       const formulario = evento.currentTarget;
+
+      // Si hay un campo obligatorio inválido dentro de un libro contraído,
+      // se expande antes de mostrar la validación del navegador.
+      const primerInvalido = formulario.querySelector(':invalid');
+      const libroInvalido = primerInvalido?.closest('.libro');
+      if (libroInvalido) {
+        expandirLibro(libroInvalido);
+        primerInvalido.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
 
       if (!formulario.reportValidity()) return;
 
@@ -636,6 +850,7 @@
         return;
       }
 
+      solicitudEnCurso = true;
       btn.disabled = true;
       btn.textContent = 'Enviando solicitud...';
 
@@ -644,6 +859,7 @@
       google.script.run
         .withSuccessHandler(function(respuesta) {
 
+          solicitudEnCurso = false;
           btn.disabled = false;
           btn.textContent = 'Enviar solicitud';
 
@@ -668,6 +884,7 @@
         })
         .withFailureHandler(function(error) {
 
+          solicitudEnCurso = false;
           btn.disabled = false;
           btn.textContent = 'Enviar solicitud';
 
@@ -696,6 +913,9 @@
 
     contadorLibros = 0;
     programaKohaActual = '';
+    versionLibros++;
+    solicitudEnCurso = false;
+    validacionEnCurso = false;
     agregarLibro();
 
     document.getElementById('confirmacion').classList.add('oculto');
@@ -711,7 +931,8 @@
   // Iniciar con un libro disponible para captura.
   agregarLibro();
 
-</script>
+  </script>
 
 </body>
+
 </html>

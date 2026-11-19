@@ -26,3 +26,19 @@ IMPORTANTE
 La integración espera que el endpoint de usuarios responda JSON con una propiedad results (arreglo), y que cada usuario tenga borrowernumber, cardnumber y full_name. branchcode es opcional. La respuesta puede incluir success y found; si la API utiliza nombres de campos diferentes, habrá que adaptar el mapeo.
 
 No se ha ejecutado una prueba autenticada contra el Koha de producción desde este entorno. Después de implementar, prueba primero con una tarjeta real autorizada. Si falla, copia aquí el mensaje exacto de Apps Script o el JSON de respuesta (ocultando datos personales y credenciales).
+
+ACTUALIZACION 2.1.0
+- Index.html ahora requiere que el docente seleccione explícitamente el registro de Koha. Ya no toma la primera coincidencia de forma automática.
+- Styles.html incluye el selector y el detalle bibliográfico.
+- Code.gs: se retiró de ADMIN_EMAILS una dirección malformada con coma. Confirma el correo correcto del tercer administrador y agrégalo antes de desplegar.
+- En Vercel actualiza también api/adquisiciones.js, src/integrations/koha/client.js, src/features/acquisitions/validate.js y src/config.js.
+- Agrega KOHA_MAX_PAGES=3 en Vercel si deseas configurar la paginación explícitamente.
+- Ejecuta npm test antes del despliegue. La versión entregada pasa las pruebas automatizadas locales, pero requiere una prueba funcional con Koha real.
+
+ACTUALIZACION 2.1.0
+- Index.html ahora requiere que el docente seleccione explícitamente el registro de Koha. Ya no toma la primera coincidencia de forma automática.
+- Styles.html incluye el selector y el detalle bibliográfico.
+- Code.gs: se retiró de ADMIN_EMAILS una dirección malformada con coma. Confirma el correo correcto del tercer administrador y agrégalo antes de desplegar.
+- En Vercel actualiza también api/adquisiciones.js, src/integrations/koha/client.js, src/features/acquisitions/validate.js y src/config.js.
+- Agrega KOHA_MAX_PAGES=3 en Vercel si deseas configurar la paginación explícitamente.
+- Ejecuta npm test antes del despliegue. La versión entregada pasa las pruebas automatizadas locales, pero requiere una prueba funcional con Koha real.

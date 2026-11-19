@@ -1,6 +1,6 @@
 {
   "name": "booky-api",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "Backend modular de Booky para Bibliotecas ITSON: Gemini + Koha catálogo de solo lectura",
   "engines": {

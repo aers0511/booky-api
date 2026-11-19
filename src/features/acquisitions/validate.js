@@ -212,7 +212,7 @@ async function validateBookAgainstCatalog(config, book) {
       .sort((a, b) => b.match.score - a.match.score);
 
     // Recupera ejemplares solo para las coincidencias más relevantes.
-    const withHoldings = await Promise.all(ranked.slice(0, 5).map(async record => {
+    const withHoldings = await Promise.all(ranked.slice(0, 10).map(async record => {
       try {
         const items = await getItems(kohaConfig, record.biblioId);
         return { ...record, items };
