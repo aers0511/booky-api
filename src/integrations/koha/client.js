@@ -170,8 +170,11 @@ function normalizeBiblio(record, baseUrl) {
   const author = firstText(record?.author, record?.main_author, record?.marc?.author);
   const isbn = firstText(record?.isbn, record?.isbn_list, record?.biblioitem?.isbn);
   const marcPublication = extractMarcPublication(record);
-  const publisher = firstText(record?.publisher, record?.publisher_name, marcPublication.publisher);
-  const year = firstText(record?.publication_year, record?.copyright_date, record?.date, marcPublication.year);
+  // En el catálogo ITSON, el dato bibliográfico de editorial es 264 $b
+  // (segundo indicador 1 = publicación). Priorizar MARC evita que un campo
+  // simplificado vacío, genérico o desactualizado lo sobrescriba.
+  const publisher = firstText(marcPublication.publisher, record?.publisher, record?.publisher_name);
+  const year = firstText(marcPublication.year, record?.publication_year, record?.copyright_date, record?.date);
   const edition = firstText(record?.edition_statement, record?.edition);
   const url = id
     ? `${baseUrl}/cgi-bin/koha/opac-detail.pl?biblionumber=${encodeURIComponent(id)}`
