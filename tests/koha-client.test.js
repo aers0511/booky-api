@@ -45,3 +45,53 @@ test('searchBiblios recorre páginas, elimina duplicados y conserva el orden', a
     global.fetch = originalFetch;
   }
 });
+
+test('searchBiblios obtiene editorial y fecha desde MARC 264 con segundo indicador 1', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify([{
+      biblio_id: 12620,
+      title: 'Ejemplo de título',
+      marc: { fields: [
+        { tag: '264', ind1: '3', ind2: '1', subfields: [
+          { code: 'a', value: 'España :' },
+          { code: 'b', value: 'Salamandra,' },
+          { code: 'c', value: '2006.' }
+        ] }
+      ] }
+    }])
+  });
+  try {
+    const result = await searchBiblios({
+      enabled: true, baseUrl: 'https://koha.example', apiPath: '/api/v1',
+      username: 'reader', password: 'secret', timeoutMs: 1000,
+      maxResults: 10, maxPages: 1
+    }, 'Ejemplo', { includeItems: false });
+    assert.equal(result.results[0].publisher, 'Salamandra');
+    assert.equal(result.results[0].year, '2006');
+  } finally { global.fetch = originalFetch; }
+});
+
+test('searchBiblios obtiene editorial desde MARCXML 264', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify([{
+      biblio_id: 12621,
+      title: 'Otro título',
+      marcxml: '<record><datafield tag="264" ind1="3" ind2="1"><subfield code="a">España :</subfield><subfield code="b">Salamandra,</subfield><subfield code="c">2006.</subfield></datafield></record>'
+    }])
+  });
+  try {
+    const result = await searchBiblios({
+      enabled: true, baseUrl: 'https://koha.example', apiPath: '/api/v1',
+      username: 'reader', password: 'secret', timeoutMs: 1000,
+      maxResults: 10, maxPages: 1
+    }, 'Otro', { includeItems: false });
+    assert.equal(result.results[0].publisher, 'Salamandra');
+    assert.equal(result.results[0].year, '2006');
+  } finally { global.fetch = originalFetch; }
+});

@@ -91,13 +91,87 @@ function firstText(...values) {
   return '';
 }
 
+function cleanMarcText(value) {
+  return firstText(value)
+    .replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
+    .replace(/[\s\u00a0]+/g, ' ')
+    .replace(/[\s,;:/.]+$/g, '')
+    .trim();
+}
+
+function marcSubfieldValues(field, code) {
+  const subfields = field?.subfields ?? field?.subfield ?? field?.$;
+  if (!subfields) return [];
+  if (Array.isArray(subfields)) {
+    return subfields.filter(item => String(item?.code ?? item?.tag ?? item?.[0] ?? '').toLowerCase() === code)
+      .map(item => item?.value ?? item?.content ?? item?.[1] ?? '');
+  }
+  if (typeof subfields === 'object') {
+    const value = subfields[code] ?? subfields[`$${code}`];
+    return Array.isArray(value) ? value : value == null ? [] : [value];
+  }
+  return [];
+}
+
+function extractMarcPublication(record) {
+  // La API REST de Koha puede exponer MARC como objeto estructurado o XML,
+  // dependiendo de la versión y de la configuración de la respuesta.
+  const marc = record?.marc ?? record?.marc_record ?? record?.marc_data ?? record?.marcxml;
+  const fields = [];
+
+  if (marc && typeof marc === 'object') {
+    const source = Array.isArray(marc) ? marc : (marc.fields ?? marc.record?.fields ?? marc);
+    if (Array.isArray(source)) {
+      fields.push(...source);
+    } else if (source && typeof source === 'object') {
+      for (const tag of ['264', '260']) {
+        const value = source[tag];
+        if (Array.isArray(value)) fields.push(...value.map(field => ({ tag, ...field })));
+        else if (value) fields.push({ tag, ...(typeof value === 'object' ? value : { value }) });
+      }
+    }
+  }
+
+  for (const field of fields) {
+    const tag = String(field?.tag ?? field?.field ?? field?.marcTag ?? '');
+    if (tag !== '264' && tag !== '260') continue;
+    const ind2 = String(field?.ind2 ?? field?.indicator2 ?? field?.indicators?.[1] ?? field?.indicators?.ind2 ?? '');
+    // 264 con segundo indicador 1 = publicación. Para 260 se usa $b.
+    if (tag === '264' && ind2 && ind2 !== '1') continue;
+    const publisher = marcSubfieldValues(field, 'b').map(cleanMarcText).filter(Boolean);
+    const date = marcSubfieldValues(field, 'c').map(cleanMarcText).filter(Boolean);
+    if (publisher.length || date.length) return { publisher: publisher.join('; ') || '', year: date[0] || '' };
+  }
+
+  // Respuesta MARCXML: recuperar $b y $c del 264 con segundo indicador 1.
+  const xml = typeof marc === 'string' ? marc : '';
+  if (xml) {
+    const fieldMatches = [...xml.matchAll(/<datafield\b([^>]*)\btag=["'](264|260)["']([^>]*)>([\s\S]*?)<\/datafield>/gi)];
+    for (const match of fieldMatches) {
+      const tag = match[2];
+      const attrs = `${match[1]} ${match[3]}`;
+      const ind2 = attrs.match(/ind2=["']([^"']*)["']/i)?.[1] || '';
+      if (tag === '264' && ind2 && ind2 !== '1') continue;
+      const body = match[4];
+      const getCode = code => [...body.matchAll(new RegExp(`<subfield\\b[^>]*code=["']${code}["'][^>]*>([\\s\\S]*?)<\\/subfield>`, 'gi'))]
+        .map(item => cleanMarcText(item[1].replace(/<[^>]+>/g, ''))).filter(Boolean);
+      const publisher = getCode('b');
+      const date = getCode('c');
+      if (publisher.length || date.length) return { publisher: publisher.join('; '), year: date[0] || '' };
+    }
+  }
+  return { publisher: '', year: '' };
+}
+
 function normalizeBiblio(record, baseUrl) {
   const id = record?.biblio_id ?? record?.id ?? record?.biblionumber;
   const title = firstText(record?.title, record?.uniform_title, record?.marc?.title);
   const author = firstText(record?.author, record?.main_author, record?.marc?.author);
   const isbn = firstText(record?.isbn, record?.isbn_list, record?.biblioitem?.isbn);
-  const publisher = firstText(record?.publisher, record?.publisher_name);
-  const year = firstText(record?.publication_year, record?.copyright_date, record?.date);
+  const marcPublication = extractMarcPublication(record);
+  const publisher = firstText(record?.publisher, record?.publisher_name, marcPublication.publisher);
+  const year = firstText(record?.publication_year, record?.copyright_date, record?.date, marcPublication.year);
   const edition = firstText(record?.edition_statement, record?.edition);
   const url = id
     ? `${baseUrl}/cgi-bin/koha/opac-detail.pl?biblionumber=${encodeURIComponent(id)}`
