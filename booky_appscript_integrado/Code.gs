@@ -10,7 +10,8 @@ const CONFIG = {
   // Agregar aquí los correos autorizados cuando estén disponibles.
   ADMIN_EMAILS: [
     'jose.arrayales54814@potros.itson.edu.mx',
-    'maria.tirado17734@potros.itson.edu.mx'
+    'maria.tirado17734@potros.itson.edu.mx',
+    'angel.reyes215999@potros.itson.edu.mx'
     // TODO: agregar el correo correcto del tercer administrador; el valor
     // original contenía una coma en el nombre de usuario y no era válido.
   ],
@@ -304,12 +305,17 @@ function bookyApiRequest_(ruta, opciones) {
  * Busca una persona por número de tarjeta en Koha.
  * Esta función se ejecuta en Apps Script, nunca desde el navegador directamente.
  */
-function buscarSolicitante(cardnumber) {
-  const tarjeta = String(cardnumber || '').trim();
-
-  if (!tarjeta || tarjeta.length > 64) {
-    throw new Error('Captura un número de tarjeta válido.');
+function normalizarNumeroKoha_(valor) {
+  const numero = String(valor || '').trim();
+  if (!/^\d{1,11}$/.test(numero)) {
+    throw new Error('El ID debe contener únicamente números y tener como máximo 11 dígitos.');
   }
+  return numero.padStart(11, '0');
+}
+
+function buscarSolicitante(cardnumber) {
+  // Koha ITSON requiere el número de tarjeta con longitud fija de 11 dígitos.
+  const tarjeta = normalizarNumeroKoha_(cardnumber);
 
   const ruta = '/api/adquisiciones/usuarios?cardnumber=' +
     encodeURIComponent(tarjeta);
@@ -454,7 +460,6 @@ function registrarSolicitud(datos) {
 
   const campos = [
     'solicitante',
-    'extension',
     'cardnumber',
     'borrowernumber'
   ];
@@ -560,7 +565,7 @@ function registrarSolicitud(datos) {
       hora,
       correo,
       String(datos.solicitante).trim(),
-      String(datos.extension).trim(),
+      String(datos.extension || '').trim(),
       '',
       '',
       '',

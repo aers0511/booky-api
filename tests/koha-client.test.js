@@ -125,3 +125,65 @@ test('prioriza 264 $b y $c del MARC ITSON sobre campos simplificados de Koha', a
     assert.equal(result.results[0].year, '2006');
   } finally { global.fetch = originalFetch; }
 });
+
+
+test('prioriza 264 31 y conserva todas las editoriales de los subcampos $b', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify([{
+      biblio_id: 2003,
+      title: 'Harry Potter',
+      publisher: 'Editorial desactualizada',
+      publication_year: '2002',
+      marc: { fields: [
+        { tag: '264', ind1: '2', ind2: '1', subfields: [
+          { code: 'b', value: 'Editorial anterior,' },
+          { code: 'c', value: '2001.' }
+        ] },
+        { tag: '264', ind1: '3', ind2: '1', subfields: [
+          { code: 'a', value: 'México :' },
+          { code: 'b', value: 'Arthur A. Levine Books,' },
+          { code: 'b', value: 'Scholastic Press,' },
+          { code: 'c', value: '2003,' }
+        ] },
+        { tag: '260', subfields: [
+          { code: 'b', value: 'Editorial antigua' },
+          { code: 'c', value: '1999' }
+        ] }
+      ] }
+    }])
+  });
+  try {
+    const result = await searchBiblios({
+      enabled: true, baseUrl: 'https://koha.example', apiPath: '/api/v1',
+      username: 'reader', password: 'secret', timeoutMs: 1000,
+      maxResults: 10, maxPages: 1
+    }, 'Harry Potter', { includeItems: false });
+    assert.equal(result.results[0].publisher, 'Arthur A. Levine Books; Scholastic Press');
+    assert.equal(result.results[0].year, '2003');
+  } finally { global.fetch = originalFetch; }
+});
+
+test('prioriza 264 31 en MARCXML y conserva múltiples subcampos $b', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => JSON.stringify([{
+      biblio_id: 2004,
+      title: 'Harry Potter',
+      marcxml: '<record><datafield tag="264" ind1="3" ind2="1"><subfield code="a">México :</subfield><subfield code="b">Arthur A. Levine Books,</subfield><subfield code="b">Scholastic Press,</subfield><subfield code="c">2003,</subfield></datafield></record>'
+    }])
+  });
+  try {
+    const result = await searchBiblios({
+      enabled: true, baseUrl: 'https://koha.example', apiPath: '/api/v1',
+      username: 'reader', password: 'secret', timeoutMs: 1000,
+      maxResults: 10, maxPages: 1
+    }, 'Harry Potter', { includeItems: false });
+    assert.equal(result.results[0].publisher, 'Arthur A. Levine Books; Scholastic Press');
+    assert.equal(result.results[0].year, '2003');
+  } finally { global.fetch = originalFetch; }
+});

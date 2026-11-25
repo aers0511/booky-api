@@ -8,30 +8,32 @@
 
 <body>
 
+  <a class="salto-contenido" href="#contenidoPrincipal">Saltar al contenido principal</a>
   <header class="encabezado">
     <div class="encabezado-contenido">
-      <h1>Administración de Solicitudes Bibliográficas</h1>
-      <p>Bibliotecas ITSON · Panel de gestión</p>
+      <div class="marca-institucional">BIBLIOTECAS ITSON</div>
+      <h1>Gestión de solicitudes</h1>
+      <p>Consulta, revisa y actualiza las solicitudes de material bibliográfico.</p>
     </div>
   </header>
 
-  <main class="contenedor">
+  <main class="contenedor" id="contenidoPrincipal">
 
     <div id="mensaje" class="mensaje"></div>
 
     <section class="tarjeta">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
         <div>
-          <h2 style="margin-bottom:5px">Panel de solicitudes</h2>
-          <p class="texto-ayuda">Consulta y administra los requerimientos bibliográficos recibidos.</p>
+          <h2 style="margin-bottom:5px">Solicitudes recibidas</h2>
+          <p class="texto-ayuda">Revisa el estado de cada solicitud y consulta su información.</p>
         </div>
 
         <div class="acciones" style="margin-top:0">
           <button class="boton boton-secundario" onclick="cargarSolicitudes()">
-            ↻ Actualizar
+            Actualizar datos
           </button>
           <button class="boton boton-amarillo" onclick="exportarCSV()">
-            ↓ Exportar CSV
+            Exportar a CSV
           </button>
         </div>
       </div>
@@ -65,13 +67,13 @@
 
     <section class="tarjeta">
 
-      <h2>Buscar y filtrar solicitudes</h2>
+      <h2>Buscar solicitudes</h2>
 
       <div class="rejilla">
 
         <div class="campo">
           <label for="busqueda">Buscar</label>
-          <input id="busqueda" type="search" placeholder="Folio, profesor, correo o programa..."
+          <input id="busqueda" type="search" placeholder="Folio, nombre, correo o programa educativo"
             oninput="aplicarFiltros()">
         </div>
 
@@ -639,6 +641,7 @@
     cargarSolicitudes();
 
   </script>
+
 
 </body>
 

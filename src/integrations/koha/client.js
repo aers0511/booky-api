@@ -115,11 +115,34 @@ function marcSubfieldValues(field, code) {
 }
 
 function extractMarcPublication(record) {
-  // La API REST de Koha puede exponer MARC como objeto estructurado o XML,
-  // dependiendo de la versión y de la configuración de la respuesta.
+  // Koha puede exponer MARC como objeto estructurado o como MARCXML.
+  // El campo 264 con indicadores 3 y 1 (264 31) identifica la publicación:
+  // $b contiene la editorial y $c la fecha de publicación.
   const marc = record?.marc ?? record?.marc_record ?? record?.marc_data ?? record?.marcxml;
-  const fields = [];
+  const candidates = [];
 
+  const addCandidate = (tag, ind1, ind2, publisher, date) => {
+    const publishers = publisher.map(cleanMarcText).filter(Boolean);
+    const dates = date.map(cleanMarcText).filter(Boolean);
+    if (!publishers.length && !dates.length) return;
+
+    // Priorizar exactamente 264 31; después otros 264 de publicación;
+    // finalmente los campos MARC heredados o con indicadores incompletos.
+    const priority = tag === '264' && ind1 === '3' && ind2 === '1'
+      ? 0
+      : tag === '264' && ind2 === '1'
+        ? 1
+        : tag === '260'
+          ? 2
+          : 3;
+    candidates.push({
+      priority,
+      publisher: publishers.join('; '),
+      year: dates[0] || ''
+    });
+  };
+
+  const fields = [];
   if (marc && typeof marc === 'object') {
     const source = Array.isArray(marc) ? marc : (marc.fields ?? marc.record?.fields ?? marc);
     if (Array.isArray(source)) {
@@ -136,32 +159,40 @@ function extractMarcPublication(record) {
   for (const field of fields) {
     const tag = String(field?.tag ?? field?.field ?? field?.marcTag ?? '');
     if (tag !== '264' && tag !== '260') continue;
+    const ind1 = String(field?.ind1 ?? field?.indicator1 ?? field?.indicators?.[0] ?? field?.indicators?.ind1 ?? '');
     const ind2 = String(field?.ind2 ?? field?.indicator2 ?? field?.indicators?.[1] ?? field?.indicators?.ind2 ?? '');
-    // 264 con segundo indicador 1 = publicación. Para 260 se usa $b.
     if (tag === '264' && ind2 && ind2 !== '1') continue;
-    const publisher = marcSubfieldValues(field, 'b').map(cleanMarcText).filter(Boolean);
-    const date = marcSubfieldValues(field, 'c').map(cleanMarcText).filter(Boolean);
-    if (publisher.length || date.length) return { publisher: publisher.join('; ') || '', year: date[0] || '' };
+    addCandidate(
+      tag,
+      ind1,
+      ind2,
+      marcSubfieldValues(field, 'b'),
+      marcSubfieldValues(field, 'c')
+    );
   }
 
-  // Respuesta MARCXML: recuperar $b y $c del 264 con segundo indicador 1.
+  // Algunas instalaciones de Koha devuelven el registro como MARCXML.
   const xml = typeof marc === 'string' ? marc : '';
   if (xml) {
     const fieldMatches = [...xml.matchAll(/<datafield\b([^>]*)\btag=["'](264|260)["']([^>]*)>([\s\S]*?)<\/datafield>/gi)];
     for (const match of fieldMatches) {
       const tag = match[2];
       const attrs = `${match[1]} ${match[3]}`;
+      const ind1 = attrs.match(/ind1=["']([^"']*)["']/i)?.[1] || '';
       const ind2 = attrs.match(/ind2=["']([^"']*)["']/i)?.[1] || '';
       if (tag === '264' && ind2 && ind2 !== '1') continue;
       const body = match[4];
       const getCode = code => [...body.matchAll(new RegExp(`<subfield\\b[^>]*code=["']${code}["'][^>]*>([\\s\\S]*?)<\\/subfield>`, 'gi'))]
-        .map(item => cleanMarcText(item[1].replace(/<[^>]+>/g, ''))).filter(Boolean);
-      const publisher = getCode('b');
-      const date = getCode('c');
-      if (publisher.length || date.length) return { publisher: publisher.join('; '), year: date[0] || '' };
+        .map(item => item[1].replace(/<[^>]+>/g, ''));
+      addCandidate(tag, ind1, ind2, getCode('b'), getCode('c'));
     }
   }
-  return { publisher: '', year: '' };
+
+  candidates.sort((a, b) => a.priority - b.priority);
+  const selected = candidates[0];
+  return selected
+    ? { publisher: selected.publisher, year: selected.year }
+    : { publisher: '', year: '' };
 }
 
 function normalizeBiblio(record, baseUrl) {

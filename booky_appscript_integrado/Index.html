@@ -8,40 +8,54 @@
 
 <body>
 
+  <a class="salto-contenido" href="#contenidoPrincipal">Saltar al contenido principal</a>
   <header class="encabezado">
     <div class="encabezado-contenido">
-      <h1>Solicitud de Material Bibliográfico</h1>
-      <p>Bibliotecas ITSON · Sistema de requerimientos bibliográficos</p>
+      <div class="marca-institucional">BIBLIOTECAS ITSON</div>
+      <h1>Solicitud de material bibliográfico</h1>
+      <p>Solicita los libros que necesitas para tus actividades académicas.</p>
     </div>
   </header>
 
-  <main class="contenedor">
+  <main class="contenedor" id="contenidoPrincipal">
 
-    <div id="mensaje" class="mensaje"></div>
+    <div class="introduccion-formulario">
+      <span class="etiqueta-superior">FORMULARIO DE SOLICITUD</span>
+      <h2>Completa tu solicitud en tres pasos</h2>
+      <p>Registra tus datos, agrega los materiales y revisa la información antes de enviarla. Los campos con * son obligatorios.</p>
+      <ol class="pasos-resumen">
+        <li><span>1</span> Datos del solicitante</li>
+        <li><span>2</span> Material solicitado</li>
+        <li><span>3</span> Revisión y envío</li>
+      </ol>
+    </div>
+    <div id="mensaje" class="mensaje" role="status" aria-live="polite"></div>
 
     <form id="formulario">
 
       <section class="tarjeta">
-        <h2>1. Datos del solicitante</h2>
+        <h2><span class="numero-seccion">01</span> Datos del solicitante</h2>
+        <p class="ayuda-seccion">Busca tu registro institucional para completar tus datos automáticamente.</p>
 
         <div class="rejilla">
 
           <div class="campo busqueda-profesor" style="grid-column:1 / -1">
-            <label for="cardnumber">ID del solicitante *</label>
+            <label for="cardnumber">Número de empleado o ID institucional *</label>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <input id="cardnumber" name="cardnumber"
-                     type="text" required maxlength="64"
-                     autocomplete="off"
-                     placeholder="Ingresa el ID del solicitante"
+                     type="text" required maxlength="11" inputmode="numeric"
+                     pattern="[0-9]{1,11}" autocomplete="off"
+                     placeholder="Ej. 215999"
+                     aria-describedby="ayudaCardnumber"
                      style="flex:1;min-width:220px">
               <button id="btnBuscarProfesor" type="button"
                       class="boton boton-secundario"
                       onclick="consultarSolicitante()">
-                Buscar en Koha
+                Buscar mis datos
               </button>
             </div>
-            <p id="estadoBusquedaProfesor" class="estado-busqueda texto-ayuda" aria-live="polite">Busca al profesor para
-              completar sus datos.</p>
+            <p id="ayudaCardnumber" class="texto-ayuda">Si tu número tiene menos de 11 dígitos, agregaremos los ceros al inicio automáticamente.</p>
+            <p id="estadoBusquedaProfesor" class="estado-busqueda texto-ayuda" aria-live="polite">Selecciona “Buscar mis datos” para consultar tu registro institucional.</p>
             <input id="borrowernumber" type="hidden" value="">
             <input id="cardnumberConfirmado" type="hidden" value="">
           </div>
@@ -50,14 +64,14 @@
             <label for="solicitante">Nombre del solicitante *</label>
             <input id="solicitante" name="solicitante"
                    type="text" required readonly
-                   placeholder="Se completará al encontrarlo en Koha">
+                   placeholder="Se completará después de la búsqueda">
           </div>
 
           <div class="campo">
-            <label for="extension">Extensión telefónica *</label>
+            <label for="extension">Extensión telefónica <span class="texto-ayuda">(opcional)</span></label>
             <input id="extension" name="extension"
-                   type="text" required
-                   placeholder="Número de extensión">
+                   type="text"
+                   placeholder="Ej. 1234 (si cuentas con una)">
           </div>
 
         </div>
@@ -65,11 +79,11 @@
 
 
       <section class="tarjeta">
-        <h2>2. Material bibliográfico solicitado</h2>
+        <h2><span class="numero-seccion">02</span> Material bibliográfico</h2>
+        <p class="ayuda-seccion">Indica qué libros necesitas. Puedes agregar más de un título en la misma solicitud.</p>
 
         <p class="texto-ayuda">
-          Puedes agregar varios libros dentro de una misma solicitud.
-          Indica la cantidad requerida para cada campus.
+          Captura los datos que conozcas. Después podrás consultar el catálogo para verificar si el libro ya está registrado y cuántos ejemplares hay en cada campus.
         </p>
 
         <div id="listaLibros"></div>
@@ -78,19 +92,19 @@
         <div class="acciones">
           <button type="button" class="boton boton-secundario"
                   onclick="agregarLibro()">
-            + Agregar otro libro
+            + Agregar un libro
           </button>
         </div>
 
         <div class="acciones-validacion">
           <div class="acciones-validacion-info">
-            <strong>Validación del catálogo</strong>
-            <p class="texto-ayuda">Consulta todos los libros registrados y revisa sus coincidencias y ejemplares por campus.</p>
+            <strong>Consulta del catálogo ITSON</strong>
+            <p class="texto-ayuda">Compara los títulos encontrados y revisa la disponibilidad por campus antes de enviar.</p>
           </div>
           <button id="btnValidarLibros" type="button"
                   class="boton boton-secundario"
                   onclick="validarLibrosEnBooky()">
-            Validar todos los libros con Booky
+            Consultar catálogo
           </button>
         </div>
 
@@ -100,11 +114,11 @@
 
 
       <section class="tarjeta">
-        <h2>3. Enviar solicitud</h2>
+        <h2><span class="numero-seccion">03</span> Revisa tu solicitud</h2>
+        <p class="ayuda-seccion">Confirma que los libros, los datos académicos y las cantidades sean correctos.</p>
 
         <p class="texto-ayuda">
-          Verifica que los datos y cantidades sean correctos antes de enviar.
-          Al finalizar, recibirás un folio de seguimiento.
+          Cuando envíes la solicitud, recibirás un folio que podrás utilizar para darle seguimiento.
         </p>
 
         <div class="acciones">
@@ -118,28 +132,29 @@
     </form>
 
     <section id="confirmacion" class="tarjeta oculto">
-      <h2>¡Solicitud registrada!</h2>
-      <p>Tu solicitud fue recibida correctamente.</p>
-      <p>Tu folio de seguimiento es:</p>
+      <h2>Tu solicitud fue recibida</h2>
+      <p>Hemos recibido la información. Conserva el siguiente folio para futuras consultas.</p>
+      <p>Folio de seguimiento</p>
       <h2 id="folioGenerado"></h2>
       <p class="texto-ayuda">
         Guarda este folio para futuras consultas.
       </p>
       <button type="button" class="boton"
               onclick="nuevaSolicitud()">
-        Registrar otra solicitud
+        Crear una nueva solicitud
       </button>
     </section>
 
   </main>
 
   <footer class="pie">
-    Sistema de Requerimientos Bibliográficos · Bibliotecas ITSON
+    Bibliotecas ITSON · Solicitudes de material bibliográfico
   </footer>
 
 
   <script>
-    const CAMPUS = [
+
+  const CAMPUS = [
     'Centro',
     'Náinari',
     'Guaymas',
@@ -170,7 +185,7 @@
                 aria-controls="contenidoLibro${numero}"
                 onclick="alternarLibro(${numero})">
           <span class="libro-toggle-icono" aria-hidden="true">−</span>
-          <span class="libro-titulo">Libro ${numero}</span>
+          <span class="libro-titulo">Material ${numero}</span>
           <span class="libro-resumen"></span>
         </button>
         <button type="button"
@@ -184,64 +199,64 @@
       <div class="rejilla">
 
         <div class="campo">
-          <label>Título *</label>
-          <input type="text" class="titulo" required
-                 placeholder="Título del libro">
+          <label for="titulo${numero}">Título *</label>
+          <input id="titulo${numero}" type="text" class="titulo" required
+                 placeholder="Escribe el título del libro">
         </div>
 
         <div class="campo">
-          <label>Autor</label>
-          <input type="text" class="autor"
-                 placeholder="Autor o autores">
+          <label for="autor${numero}">Autor o autora</label>
+          <input id="autor${numero}" type="text" class="autor"
+                 placeholder="Autor o autora">
         </div>
 
         <div class="campo">
-          <label>Editorial</label>
-          <input type="text" class="editorial"
-                 placeholder="Editorial">
+          <label for="editorial${numero}">Editorial</label>
+          <input id="editorial${numero}" type="text" class="editorial"
+                 placeholder="Nombre de la editorial">
         </div>
 
         <div class="campo">
-          <label>Edición</label>
-          <input type="text" class="edicion"
+          <label for="edicion${numero}">Edición</label>
+          <input id="edicion${numero}" type="text" class="edicion"
                  placeholder="Ej. Segunda edición">
         </div>
 
         <div class="campo">
-          <label>Año de publicación</label>
-          <input type="text" class="anio"
+          <label for="anio${numero}">Año de publicación</label>
+          <input id="anio${numero}" type="text" class="anio"
                  placeholder="Ej. 2025">
         </div>
 
         <div class="campo">
-          <label>ISBN / ISSN</label>
-          <input type="text" class="isbn"
+          <label for="isbn${numero}">ISBN / ISSN</label>
+          <input id="isbn${numero}" type="text" class="isbn"
                  placeholder="Número de identificación">
         </div>
 
       </div>
 
-      <h3 style="margin-top:20px">Información académica de este libro</h3>
+      <h3 style="margin-top:20px">Información académica</h3>
       <div class="rejilla">
         <div class="campo">
           <label>Programa educativo *</label>
           <input type="text" class="programa" required
-                 placeholder="Programa educativo que requiere el libro">
+                 placeholder="Ej. Ingeniería Industrial">
         </div>
         <div class="campo">
           <label>Materia que respalda la solicitud *</label>
           <input type="text" class="materia" required
-                 placeholder="Materia relacionada con este libro">
+                 placeholder="Nombre de la materia">
         </div>
         <div class="campo" style="grid-column:1 / -1">
           <label>Justificación u observaciones</label>
           <textarea class="justificacion"
-                    placeholder="Explica por qué se requiere este material bibliográfico."></textarea>
+                    placeholder="Indica brevemente para qué actividad o materia se necesita este libro."></textarea>
         </div>
       </div>
 
       <h3 style="margin-top:20px">
-        Cantidades por campus
+        ¿Cuántos ejemplares necesitas?
       </h3>
 
     
@@ -250,14 +265,14 @@
           <div class="campo cantidad">
             <label>${campus}</label>
 
-            <small>Disponibles en biblioteca</small>
+            <small>Disponibles actualmente</small>
             <input type="number"
                    class="existencia-campus"
                    data-campus="${indice}"
                    readonly
                    placeholder="Sin validar">
 
-            <small>Cantidad que solicita</small>
+            <small>Cantidad que solicitas</small>
             <input type="number"
                    min="0"
                    step="1"
@@ -271,7 +286,7 @@
       </div>
 
       <p class="texto-ayuda">
-        Indica al menos un ejemplar en alguno de los campus.
+        Escribe la cantidad que necesitas en cada campus. Si no requieres ejemplares en un campus, deja 0.
       </p>
       </div>
     `;
@@ -357,11 +372,13 @@
       const cantidades = {};
 
       CAMPUS.forEach((campus, indice) => {
+        // Hay dos controles por campus (existencias y cantidad solicitada).
+        // Debemos leer explícitamente la cantidad solicitada, no las existencias.
         const campo = elemento.querySelector(
-          '[data-campus="' + indice + '"]'
+          '.cantidad-campus[data-campus="' + indice + '"]'
         );
 
-        cantidades[campus] = Number(campo.value || 0);
+        cantidades[campus] = Number(campo?.value || 0);
       });
 
       return {
@@ -414,16 +431,30 @@
     document.getElementById('cardnumberConfirmado').value = '';
   }
 
+  function normalizarNumeroKoha(valor) {
+    const numero = String(valor || '').trim();
+    if (!/^\d{1,11}$/.test(numero)) return null;
+    return numero.padStart(11, '0');
+  }
+
   function consultarSolicitante() {
     const campoTarjeta = document.getElementById('cardnumber');
-    const cardnumber = campoTarjeta.value.trim();
+    const numeroCapturado = campoTarjeta.value.trim();
+    const cardnumber = normalizarNumeroKoha(numeroCapturado);
     const boton = document.getElementById('btnBuscarProfesor');
 
-    if (!cardnumber) {
-      establecerEstadoBusqueda('Captura el número de tarjeta.', 'error');
+    if (!numeroCapturado) {
+      establecerEstadoBusqueda('Captura tu número de empleado o ID institucional.', 'error');
       campoTarjeta.focus();
       return;
     }
+    if (!cardnumber) {
+      establecerEstadoBusqueda('El ID debe contener únicamente números y tener como máximo 11 dígitos.', 'error');
+      campoTarjeta.focus();
+      return;
+    }
+    // Koha espera el identificador de 11 dígitos, completado con ceros a la izquierda.
+    campoTarjeta.value = cardnumber;
     if (boton.disabled) return;
 
     limpiarSolicitanteConfirmado();
@@ -437,7 +468,7 @@
         // Ignora respuestas tardías si el usuario cambió la tarjeta.
         if (identificador !== consultaProfesorId || campoTarjeta.value.trim() !== cardnumber) return;
         boton.disabled = false;
-        boton.textContent = 'Buscar en Koha';
+        boton.textContent = 'Buscar mis datos';
 
         if (!respuesta || respuesta.success === false || respuesta.found === false || !Array.isArray(respuesta.results)) {
           establecerEstadoBusqueda('Koha no pudo completar la búsqueda. Intenta nuevamente.', 'error');
@@ -460,8 +491,8 @@
 
         document.getElementById('solicitante').value = usuario.full_name;
         document.getElementById('borrowernumber').value = usuario.borrowernumber;
-        document.getElementById('cardnumberConfirmado').value = usuario.cardnumber;
-        campoTarjeta.value = usuario.cardnumber;
+        document.getElementById('cardnumberConfirmado').value = cardnumber;
+        campoTarjeta.value = cardnumber;
 
         programaKohaActual = String(usuario.sort2 || '').trim();
         if (programaKohaActual) {
@@ -475,7 +506,7 @@
       .withFailureHandler(function(error) {
         if (identificador !== consultaProfesorId) return;
         boton.disabled = false;
-        boton.textContent = 'Buscar en Koha';
+        boton.textContent = 'Buscar mis datos';
         establecerEstadoBusqueda(error?.message || 'No fue posible consultar Koha. Intenta nuevamente.', 'error');
       })
       .buscarSolicitante(cardnumber);
@@ -601,7 +632,7 @@
       .withSuccessHandler(function(respuesta) {
         validacionEnCurso = false;
         boton.disabled = false;
-        boton.textContent = 'Validar todos los libros con Booky';
+        boton.textContent = 'Consultar catálogo';
 
         if (versionConsultada !== versionLibros) {
           contenedor.textContent = 'Los libros cambiaron durante la consulta. No se aplicaron resultados; vuelve a validar.';
@@ -747,7 +778,7 @@
       .withFailureHandler(function(error) {
         validacionEnCurso = false;
         boton.disabled = false;
-        boton.textContent = 'Validar todos los libros con Booky';
+        boton.textContent = 'Consultar catálogo';
         contenedor.textContent = error?.message || 'No fue posible validar los libros con Booky. Conservamos tu captura; puedes intentarlo nuevamente.';
         contenedor.className = 'mensaje error';
       })
@@ -762,12 +793,18 @@ campoTarjeta.addEventListener('input', function() {
 
   const boton = document.getElementById('btnBuscarProfesor');
   boton.disabled = false;
-  boton.textContent = 'Buscar en Koha';
+  boton.textContent = 'Buscar mis datos';
 
   establecerEstadoBusqueda(
     'El número cambió. Vuelve a buscarlo en Koha.',
     'pendiente'
   );
+});
+
+// Completar el ID al salir del campo, sin interrumpir la escritura.
+campoTarjeta.addEventListener('blur', function() {
+  const normalizado = normalizarNumeroKoha(campoTarjeta.value);
+  if (normalizado) campoTarjeta.value = normalizado;
 });
 
 // Buscar automáticamente al presionar Enter.
@@ -779,7 +816,17 @@ campoTarjeta.addEventListener('keydown', function(evento) {
 });
 
   document.getElementById('listaLibros').addEventListener('input', function(evento) {
-    if (evento.target.matches('input, textarea, select')) {
+    const campo = evento.target;
+
+    // Cambiar cantidades, programa, materia o justificación no modifica la
+    // identidad bibliográfica del libro: conserva la validación de Koha.
+    if (campo.matches('.cantidad-campus, .programa, .materia, .justificacion')) {
+      return;
+    }
+
+    if (campo.matches('.titulo, .autor, .editorial, .edicion, .anio, .isbn')) {
+      const libro = campo.closest('.libro');
+      if (campo.matches('.titulo') && libro) actualizarResumenLibro(libro);
       versionLibros++;
       invalidarResultadosBooky();
     }
@@ -863,7 +910,7 @@ campoTarjeta.addEventListener('keydown', function(evento) {
           btn.disabled = false;
           btn.textContent = 'Enviar solicitud';
 
-          if (!respuesta || !respuesta.correcto) {
+          if (!respuesta || !respuesta.correcto || !respuesta.folio) {
             mostrarMensaje(
               'No fue posible confirmar el registro.',
               'error'
