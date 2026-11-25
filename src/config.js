@@ -40,6 +40,7 @@ function getConfig() {
       enabled: String(process.env.KOHA_ENABLED || 'false').toLowerCase() === 'true',
       askCampus: String(process.env.KOHA_ASK_CAMPUS || 'true').toLowerCase() === 'true',
       baseUrl: kohaBase,
+      marcBaseUrl: (process.env.KOHA_MARC_BASE_URL || 'https://sib-intra.itson.edu.mx').trim().replace(/\/+$/, ''),
       apiPath: (process.env.KOHA_API_PATH || '/api/v1').replace(/^\/?/, '/').replace(/\/+$/, ''),
       username: process.env.KOHA_API_USERNAME || '',
       password: process.env.KOHA_API_PASSWORD || '',

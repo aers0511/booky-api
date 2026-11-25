@@ -20,7 +20,7 @@ function buildAuthHeader(username, password) {
   return 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
 }
 
-async function kohaGet(config, path, query = {}, accept = 'application/json') {
+async function kohaGet(config, path, query = {}) {
   const url = new URL(
     `${config.baseUrl}${config.apiPath}${path.startsWith('/') ? path : '/' + path}`
   );
@@ -39,7 +39,7 @@ async function kohaGet(config, path, query = {}, accept = 'application/json') {
       method: 'GET',
       headers: {
         'Authorization': buildAuthHeader(config.username, config.password),
-        'Accept': accept
+        'Accept': 'application/json'
       },
       signal: controller.signal
     });
@@ -159,8 +159,8 @@ function extractMarcPublication(record) {
   for (const field of fields) {
     const tag = String(field?.tag ?? field?.field ?? field?.marcTag ?? '');
     if (tag !== '264' && tag !== '260') continue;
-    const ind1 = String(field?.ind1 ?? field?.indicator1 ?? field?.indicators?.[0] ?? field?.indicators?.ind1 ?? '').trim();
-    const ind2 = String(field?.ind2 ?? field?.indicator2 ?? field?.indicators?.[1] ?? field?.indicators?.ind2 ?? '').trim();
+    const ind1 = String(field?.ind1 ?? field?.indicator1 ?? field?.indicators?.[0] ?? field?.indicators?.ind1 ?? '');
+    const ind2 = String(field?.ind2 ?? field?.indicator2 ?? field?.indicators?.[1] ?? field?.indicators?.ind2 ?? '');
     if (tag === '264' && ind2 && ind2 !== '1') continue;
     addCandidate(
       tag,
@@ -178,8 +178,8 @@ function extractMarcPublication(record) {
     for (const match of fieldMatches) {
       const tag = match[2];
       const attrs = `${match[1]} ${match[3]}`;
-      const ind1 = (attrs.match(/ind1=["']([^"']*)["']/i)?.[1] || '').trim();
-      const ind2 = (attrs.match(/ind2=["']([^"']*)["']/i)?.[1] || '').trim();
+      const ind1 = attrs.match(/ind1=["']([^"']*)["']/i)?.[1] || '';
+      const ind2 = attrs.match(/ind2=["']([^"']*)["']/i)?.[1] || '';
       if (tag === '264' && ind2 && ind2 !== '1') continue;
       const body = match[4];
       const getCode = code => [...body.matchAll(new RegExp(`<subfield\\b[^>]*code=["']${code}["'][^>]*>([\\s\\S]*?)<\\/subfield>`, 'gi'))]
@@ -193,6 +193,109 @@ function extractMarcPublication(record) {
   return selected
     ? { publisher: selected.publisher, year: selected.year }
     : { publisher: '', year: '' };
+}
+
+
+function decodeHtmlEntities(value) {
+  return String(value || '')
+    .replace(/&nbsp;|&#160;/gi, ' ')
+    .replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)));
+}
+
+/**
+ * Koha REST /biblios normalmente entrega los campos normalizados, pero no
+ * necesariamente el MARC completo. Como respaldo consulta showmarc.pl,
+ * que es la misma vista MARC que ofrece el OPAC.
+ */
+function extractMarcPublicationFromHtml(html) {
+  const source = String(html || '');
+  if (!source) return { publisher: '', year: '' };
+
+  // Si showmarc devuelve MARCXML incrustado, reutiliza el extractor principal.
+  const xmlMatch = source.match(/<record\b[\s\S]*?<\/record>/i);
+  if (xmlMatch) {
+    const parsed = extractMarcPublication({ marcxml: xmlMatch[0] });
+    if (parsed.publisher || parsed.year) return parsed;
+  }
+
+  const candidates = [];
+  const add = (ind1, ind2, body) => {
+    if (ind2 && ind2 !== '1') return;
+    const normalized = decodeHtmlEntities(String(body || '').replace(/<[^>]*>/g, ' '))
+      .replace(/\s+/g, ' ').trim();
+    const subfields = [...normalized.matchAll(/(?:\$|‡|\|)\s*([a-z0-9])\s*/gi)];
+    const values = {};
+    for (let i = 0; i < subfields.length; i++) {
+      const code = subfields[i][1].toLowerCase();
+      const start = subfields[i].index + subfields[i][0].length;
+      const end = i + 1 < subfields.length ? subfields[i + 1].index : normalized.length;
+      (values[code] ||= []).push(normalized.slice(start, end).trim());
+    }
+    const publishers = (values.b || []).map(cleanMarcText).filter(Boolean);
+    const dates = (values.c || []).map(cleanMarcText).filter(Boolean);
+    if (publishers.length || dates.length) {
+      candidates.push({
+        priority: ind1 === '3' && ind2 === '1' ? 0 : 1,
+        publisher: publishers.join('; '),
+        year: dates[0] || ''
+      });
+    }
+  };
+
+  // Vista HTML de Koha: cada campo MARC suele representarse en una fila.
+  const rows = [...source.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].map(m => m[1]);
+  for (const row of rows) {
+    const cells = [...row.matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)]
+      .map(m => decodeHtmlEntities(m[1].replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim());
+    if (cells[0] === '264' && cells.length >= 4) {
+      add(cells[1], cells[2], cells.slice(3).join(' '));
+    } else {
+      const plain = decodeHtmlEntities(row.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ');
+      const match = plain.match(/\b264\s+([0-9 ])\s*([0-9 ])\s*([\s\S]*)/);
+      if (match) add(match[1].trim(), match[2].trim(), match[3]);
+    }
+  }
+
+  // Algunas plantillas presentan los campos MARC en texto preformateado.
+  if (!candidates.length) {
+    const plain = decodeHtmlEntities(source.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ');
+    const regex = /\b264\s+([0-9 ])\s*([0-9 ])\s*([\s\S]*?)(?=\b(?:245|250|260|300|336|337|338|490|500|650|700|856)\s+[0-9 ]{2}\b|$)/g;
+    for (const match of plain.matchAll(regex)) add(match[1].trim(), match[2].trim(), match[3]);
+  }
+
+  candidates.sort((a, b) => a.priority - b.priority);
+  const selected = candidates[0];
+  return selected ? { publisher: selected.publisher, year: selected.year } : { publisher: '', year: '' };
+}
+
+async function fetchMarcPublication(config, biblioId) {
+  if (!biblioId) return { publisher: '', year: '' };
+  const baseUrl = String(config.marcBaseUrl || config.baseUrl).replace(/\/+$/, '');
+  const url = new URL(`${baseUrl}/cgi-bin/koha/catalogue/showmarc.pl`);
+  url.searchParams.set('id', String(biblioId));
+  url.searchParams.set('viewas', 'html');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), config.timeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: buildAuthHeader(config.username, config.password),
+        Accept: 'text/html,application/xhtml+xml'
+      },
+      signal: controller.signal
+    });
+    if (!response.ok) return { publisher: '', year: '' };
+    return extractMarcPublicationFromHtml(await response.text());
+  } catch (_) {
+    // El fallo de la vista MARC no debe impedir mostrar el resultado del catálogo.
+    return { publisher: '', year: '' };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function normalizeBiblio(record, baseUrl) {
@@ -273,17 +376,6 @@ async function getItems(config, biblioId) {
   return asArray(data).map(normalizeItem);
 }
 
-async function getMarcPublication(config, biblioId) {
-  if (!biblioId) return { publisher: '', year: '' };
-  const marcxml = await kohaGet(
-    config,
-    `/biblios/${encodeURIComponent(biblioId)}`,
-    {},
-    'application/marcxml+xml'
-  );
-  return extractMarcPublication({ marcxml });
-}
-
 async function searchBiblios(config, rawQuery, options = {}) {
   if (!isConfigured(config)) {
     throw new KohaError(
@@ -331,7 +423,17 @@ async function searchBiblios(config, rawQuery, options = {}) {
     if (batch.length < perPage) break;
   }
 
-  const biblios = records.map(record => normalizeBiblio(record, config.baseUrl));
+  const biblios = await Promise.all(records.map(async record => {
+    const normalized = normalizeBiblio(record, config.baseUrl);
+    // La API REST no siempre incluye el MARC. Recupera 264 31 desde
+    // showmarc.pl solo cuando faltan editorial o año.
+    if (config.marcBaseUrl && (!normalized.publisher || !normalized.year) && normalized.biblioId) {
+      const marc = await fetchMarcPublication(config, normalized.biblioId);
+      normalized.publisher = firstText(marc.publisher, normalized.publisher) || null;
+      normalized.year = firstText(marc.year, normalized.year) || null;
+    }
+    return normalized;
+  }));
   const unique = [...new Map(biblios.map(record => [
     String(record.biblioId || `${record.title}|${record.author}|${record.isbn}`), record
   ])).values()];
@@ -350,18 +452,8 @@ async function searchBiblios(config, rawQuery, options = {}) {
       const index = cursor++;
       const biblio = queue[index];
       try {
-        const [items, marcPub] = await Promise.all([
-          getItems(config, biblio.biblioId),
-          (!biblio.publisher || !biblio.year)
-            ? getMarcPublication(config, biblio.biblioId).catch(() => ({ publisher: '', year: '' }))
-            : Promise.resolve({ publisher: '', year: '' })
-        ]);
-        enriched[index] = {
-          ...biblio,
-          publisher: biblio.publisher || marcPub.publisher || null,
-          year: biblio.year || marcPub.year || null,
-          items
-        };
+        const items = await getItems(config, biblio.biblioId);
+        enriched[index] = { ...biblio, items };
       } catch {
         enriched[index] = { ...biblio, items: [], itemsUnavailable: true };
       }
@@ -445,5 +537,8 @@ module.exports = {
   searchBiblios,
   getItems,
   searchPatronByCardnumber,
-  normalizePatron
+  normalizePatron,
+  extractMarcPublication,
+  extractMarcPublicationFromHtml,
+  normalizeBiblio
 };

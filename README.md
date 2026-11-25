@@ -57,6 +57,7 @@ Configura estas variables en Project → Settings → Environment Variables:
 - `KOHA_ENABLED`: cambia a `true` cuando hayas probado las credenciales.
 - `KOHA_ASK_CAMPUS`: `true` para preguntar el campus cuando no se indique; `false` para consultar todos los campus por defecto.
 - `KOHA_BASE_URL`: `https://sib.itson.edu.mx`.
+- `KOHA_MARC_BASE_URL`: `https://sib-intra.itson.edu.mx` (servidor que sirve `catalogue/showmarc.pl`; permite recuperar 264 `$b` y `$c` cuando la API REST no incluye MARC).
 - `KOHA_API_PATH`: `/api/v1`.
 - `KOHA_API_USERNAME`: usuario técnico de Koha.
 - `KOHA_API_PASSWORD`: contraseña de ese usuario.
@@ -127,6 +128,7 @@ Ejemplos futuros: consulta de recursos digitales, ayuda para APA, información d
 - La búsqueda de Koha usa el filtro JSON del parámetro `q` documentado por Koha REST API. Los campos bibliográficos pueden variar por versión/configuración; si la instalación devuelve `invalid_query`, hay que ajustar los campos de búsqueda a la respuesta real de ITSON.
 - Las respuestas de catálogo se renderizan con el mismo sistema de tarjetas de Booky tanto si el usuario inicia la búsqueda escribiendo como si la inicia desde el botón “Buscar en catálogo”. El botón de búsqueda ya no utiliza el extractor HTML local de Koha para mostrar resultados.
 - La integración no se ha probado contra el servidor de producción de ITSON porque no se proporcionaron credenciales ni se realizó una consulta autenticada.
+- Cuando `/api/v1/biblios` no incluye el registro MARC o deja vacíos editorial/año, Booky consulta `GET /cgi-bin/koha/catalogue/showmarc.pl?id=<biblio_id>&viewas=html` en `KOHA_MARC_BASE_URL`. Extrae las editoriales repetidas de `264 31 $b` y la fecha de `264 31 $c`. Si esa vista no está disponible, conserva los datos normalizados que haya devuelto la API REST y no interrumpe la búsqueda.
 
 
 ## Endpoint independiente de adquisiciones

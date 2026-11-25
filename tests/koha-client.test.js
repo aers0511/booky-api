@@ -187,3 +187,52 @@ test('prioriza 264 31 en MARCXML y conserva múltiples subcampos $b', async () =
     assert.equal(result.results[0].year, '2003');
   } finally { global.fetch = originalFetch; }
 });
+
+
+test('extrae 264 31 desde la vista HTML showmarc de Koha', () => {
+  const { extractMarcPublicationFromHtml } = require('../src/integrations/koha/client');
+  const html = `<table><tr><td>264</td><td>3</td><td>1</td><td>$a México : $b Arthur A. Levine Books, $b Scholastic Press, $c 2003</td></tr></table>`;
+  const result = extractMarcPublicationFromHtml(html);
+  assert.equal(result.publisher, 'Arthur A. Levine Books; Scholastic Press');
+  assert.equal(result.year, '2003');
+});
+
+test('consulta showmarc cuando la API REST no devuelve editorial ni año', async () => {
+  const originalFetch = global.fetch;
+  const urls = [];
+  global.fetch = async url => {
+    const parsed = new URL(url);
+    urls.push(parsed);
+    if (parsed.pathname.endsWith('/api/v1/biblios')) {
+      return {
+        ok: true, status: 200,
+        text: async () => JSON.stringify([{
+          biblio_id: 45506,
+          title: 'Harry potter y el misterio del principe',
+          author: 'Rowling, J.K.'
+        }])
+      };
+    }
+    if (parsed.pathname.endsWith('/catalogue/showmarc.pl')) {
+      return {
+        ok: true, status: 200,
+        text: async () => `<table><tr><td>264</td><td>3</td><td>1</td><td>$a México : $b Arthur A. Levine Books, $b Scholastic Press, $c 2003</td></tr></table>`
+      };
+    }
+    throw new Error('URL inesperada: ' + parsed.href);
+  };
+  try {
+    const result = await searchBiblios({
+      enabled: true, baseUrl: 'https://koha.example', marcBaseUrl: 'https://sib-intra.itson.edu.mx',
+      apiPath: '/api/v1', username: 'reader', password: 'secret', timeoutMs: 1000,
+      maxResults: 10, maxPages: 1
+    }, 'Harry potter', { includeItems: false });
+    assert.equal(result.results[0].publisher, 'Arthur A. Levine Books; Scholastic Press');
+    assert.equal(result.results[0].year, '2003');
+    const marcUrl = urls.find(url => url.pathname.endsWith('/catalogue/showmarc.pl'));
+    assert.equal(marcUrl.searchParams.get('id'), '45506');
+    assert.equal(marcUrl.searchParams.get('viewas'), 'html');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
