@@ -57,7 +57,10 @@ Configura estas variables en Project → Settings → Environment Variables:
 - `KOHA_ENABLED`: cambia a `true` cuando hayas probado las credenciales.
 - `KOHA_ASK_CAMPUS`: `true` para preguntar el campus cuando no se indique; `false` para consultar todos los campus por defecto.
 - `KOHA_BASE_URL`: `https://sib.itson.edu.mx`.
-- `KOHA_MARC_BASE_URL`: `https://sib-intra.itson.edu.mx` (servidor que sirve `catalogue/showmarc.pl`; permite recuperar 264 `$b` y `$c` cuando la API REST no incluye MARC).
+- `KOHA_MARC_BASE_URL`: opcional. Por defecto usa `KOHA_BASE_URL` (`https://sib.itson.edu.mx`). Solo cámbialo si el MARCXML debe pedirse a otro dominio.
+- `KOHA_MARC_CONCURRENCY`: opcional, consultas MARCXML simultáneas (por defecto 4, máximo 8).
+- `KOHA_MARC_CACHE_TTL_MS`: opcional, vigencia de la caché en memoria (por defecto 21600000 = 6 h).
+- `KOHA_MARC_BUDGET_MS`: opcional, tiempo máximo para completar datos MARC por búsqueda (por defecto 8000 ms).
 - `KOHA_API_PATH`: `/api/v1`.
 - `KOHA_API_USERNAME`: usuario técnico de Koha.
 - `KOHA_API_PASSWORD`: contraseña de ese usuario.
@@ -128,7 +131,7 @@ Ejemplos futuros: consulta de recursos digitales, ayuda para APA, información d
 - La búsqueda de Koha usa el filtro JSON del parámetro `q` documentado por Koha REST API. Los campos bibliográficos pueden variar por versión/configuración; si la instalación devuelve `invalid_query`, hay que ajustar los campos de búsqueda a la respuesta real de ITSON.
 - Las respuestas de catálogo se renderizan con el mismo sistema de tarjetas de Booky tanto si el usuario inicia la búsqueda escribiendo como si la inicia desde el botón “Buscar en catálogo”. El botón de búsqueda ya no utiliza el extractor HTML local de Koha para mostrar resultados.
 - La integración no se ha probado contra el servidor de producción de ITSON porque no se proporcionaron credenciales ni se realizó una consulta autenticada.
-- Cuando `/api/v1/biblios` no incluye el registro MARC o deja vacíos editorial/año, Booky consulta `GET /cgi-bin/koha/catalogue/showmarc.pl?id=<biblio_id>&viewas=html` en `KOHA_MARC_BASE_URL`. Extrae las editoriales repetidas de `264 31 $b` y la fecha de `264 31 $c`. Si esa vista no está disponible, conserva los datos normalizados que haya devuelto la API REST y no interrumpe la búsqueda.
+- Cuando `/api/v1/biblios` deja vacíos editorial o año, Booky consulta `GET /api/v1/biblios/{biblio_id}` con `Accept: application/marcxml+xml` y las mismas credenciales Basic. No se hace scraping HTML. Extrae lugar (`$a`), editorial (`$b`, varios permitidos) y año (`$c`) de `264` con segundo indicador 1 (prioridad al primer indicador 3) y usa `260` como alternativa. Las fechas de copyright no se toman como año de publicación y no se inventan datos. Solo se completan campos vacíos, se evitan consultas repetidas (caché y deduplicación) y un fallo en un registro no interrumpe la búsqueda.
 
 
 ## Endpoint independiente de adquisiciones

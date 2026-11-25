@@ -1,3 +1,11 @@
+const {
+  cleanMarcText,
+  buildCandidate,
+  selectPublication,
+  looksLikeMarcXml,
+  parseMarcXmlPublication
+} = require('./marc');
+
 class KohaError extends Error {
   constructor(message, status = 502, code = 'koha_error') {
     super(message);
@@ -6,6 +14,13 @@ class KohaError extends Error {
     this.code = code;
   }
 }
+
+const MARCXML_ACCEPT = 'application/marcxml+xml';
+const DEFAULT_MARC_CONCURRENCY = 4;
+const DEFAULT_MARC_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 h: el catálogo cambia poco
+const DEFAULT_MARC_BUDGET_MS = 8000;
+const MARC_FAILURE_TTL_MS = 60 * 1000; // evita reintentar de inmediato un registro que falló
+const MARC_CACHE_MAX_ENTRIES = 500;
 
 function isConfigured(config) {
   return Boolean(
@@ -20,9 +35,22 @@ function buildAuthHeader(username, password) {
   return 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
 }
 
-async function kohaGet(config, path, query = {}) {
+function httpErrorMessage(status) {
+  return status === 401 ? 'Koha rechazó las credenciales de consulta.' :
+    status === 403 ? 'La cuenta de Koha no tiene permiso de catálogo.' :
+    status === 404 ? 'No se encontró el endpoint solicitado en Koha.' :
+    status === 400 ? 'Koha rechazó el formato de búsqueda.' :
+    `Koha respondió HTTP ${status}.`;
+}
+
+/**
+ * Petición GET autenticada a la API REST de Koha. Devuelve el cuerpo como texto
+ * (fetch decodifica siempre como UTF-8) y traduce los fallos a KohaError.
+ */
+async function kohaRequest(config, path, { query = {}, accept = 'application/json', baseUrl } = {}) {
+  const root = String(baseUrl || config.baseUrl).replace(/\/+$/, '');
   const url = new URL(
-    `${config.baseUrl}${config.apiPath}${path.startsWith('/') ? path : '/' + path}`
+    `${root}${config.apiPath}${path.startsWith('/') ? path : '/' + path}`
   );
 
   for (const [key, value] of Object.entries(query)) {
@@ -39,32 +67,20 @@ async function kohaGet(config, path, query = {}) {
       method: 'GET',
       headers: {
         'Authorization': buildAuthHeader(config.username, config.password),
-        'Accept': 'application/json'
+        'Accept': accept
       },
       signal: controller.signal
     });
 
     const bodyText = await response.text();
-    let data = null;
-
-    try {
-      data = bodyText ? JSON.parse(bodyText) : null;
-    } catch {
-      data = bodyText;
-    }
 
     if (!response.ok) {
-      const safeMessage =
-        response.status === 401 ? 'Koha rechazó las credenciales de consulta.' :
-        response.status === 403 ? 'La cuenta de Koha no tiene permiso de catálogo.' :
-        response.status === 404 ? 'No se encontró el endpoint solicitado en Koha.' :
-        response.status === 400 ? 'Koha rechazó el formato de búsqueda.' :
-        `Koha respondió HTTP ${response.status}.`;
-
-      throw new KohaError(safeMessage, response.status, data?.error_code || 'koha_http_error');
+      let errorCode = 'koha_http_error';
+      try { errorCode = JSON.parse(bodyText)?.error_code || errorCode; } catch { /* cuerpo no JSON */ }
+      throw new KohaError(httpErrorMessage(response.status), response.status, errorCode);
     }
 
-    return data;
+    return bodyText;
   } catch (error) {
     if (error.name === 'AbortError') {
       throw new KohaError('La consulta al catálogo agotó el tiempo de espera.', 504, 'koha_timeout');
@@ -73,6 +89,15 @@ async function kohaGet(config, path, query = {}) {
     throw new KohaError('No fue posible conectar con el catálogo Koha.', 502, 'koha_connection_error');
   } finally {
     clearTimeout(timer);
+  }
+}
+
+async function kohaGet(config, path, query = {}) {
+  const bodyText = await kohaRequest(config, path, { query });
+  try {
+    return bodyText ? JSON.parse(bodyText) : null;
+  } catch {
+    return bodyText;
   }
 }
 
@@ -91,14 +116,9 @@ function firstText(...values) {
   return '';
 }
 
-function cleanMarcText(value) {
-  return firstText(value)
-    .replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
-    .replace(/[\s\u00a0]+/g, ' ')
-    .replace(/[\s,;:/.]+$/g, '')
-    .trim();
-}
+// ---------------------------------------------------------------------------
+// MARC incluido en la respuesta JSON de búsqueda (si la instalación lo expone)
+// ---------------------------------------------------------------------------
 
 function marcSubfieldValues(field, code) {
   const subfields = field?.subfields ?? field?.subfield ?? field?.$;
@@ -114,188 +134,170 @@ function marcSubfieldValues(field, code) {
   return [];
 }
 
-function extractMarcPublication(record) {
-  // Koha puede exponer MARC como objeto estructurado o como MARCXML.
-  // El campo 264 con indicadores 3 y 1 (264 31) identifica la publicación:
-  // $b contiene la editorial y $c la fecha de publicación.
-  const marc = record?.marc ?? record?.marc_record ?? record?.marc_data ?? record?.marcxml;
-  const candidates = [];
-
-  const addCandidate = (tag, ind1, ind2, publisher, date) => {
-    const publishers = publisher.map(cleanMarcText).filter(Boolean);
-    const dates = date.map(cleanMarcText).filter(Boolean);
-    if (!publishers.length && !dates.length) return;
-
-    // Priorizar exactamente 264 31; después otros 264 de publicación;
-    // finalmente los campos MARC heredados o con indicadores incompletos.
-    const priority = tag === '264' && ind1 === '3' && ind2 === '1'
-      ? 0
-      : tag === '264' && ind2 === '1'
-        ? 1
-        : tag === '260'
-          ? 2
-          : 3;
-    candidates.push({
-      priority,
-      publisher: publishers.join('; '),
-      year: dates[0] || ''
-    });
-  };
+function marcFieldsOf(marc) {
+  if (!marc || typeof marc !== 'object') return [];
+  const source = Array.isArray(marc) ? marc : (marc.fields ?? marc.record?.fields ?? marc);
+  if (Array.isArray(source)) return source;
+  if (!source || typeof source !== 'object') return [];
 
   const fields = [];
-  if (marc && typeof marc === 'object') {
-    const source = Array.isArray(marc) ? marc : (marc.fields ?? marc.record?.fields ?? marc);
-    if (Array.isArray(source)) {
-      fields.push(...source);
-    } else if (source && typeof source === 'object') {
-      for (const tag of ['264', '260']) {
-        const value = source[tag];
-        if (Array.isArray(value)) fields.push(...value.map(field => ({ tag, ...field })));
-        else if (value) fields.push({ tag, ...(typeof value === 'object' ? value : { value }) });
-      }
-    }
+  for (const tag of ['264', '260']) {
+    const value = source[tag];
+    if (Array.isArray(value)) fields.push(...value.map(field => ({ tag, ...field })));
+    else if (value) fields.push({ tag, ...(typeof value === 'object' ? value : { value }) });
   }
-
-  for (const field of fields) {
-    const tag = String(field?.tag ?? field?.field ?? field?.marcTag ?? '');
-    if (tag !== '264' && tag !== '260') continue;
-    const ind1 = String(field?.ind1 ?? field?.indicator1 ?? field?.indicators?.[0] ?? field?.indicators?.ind1 ?? '');
-    const ind2 = String(field?.ind2 ?? field?.indicator2 ?? field?.indicators?.[1] ?? field?.indicators?.ind2 ?? '');
-    if (tag === '264' && ind2 && ind2 !== '1') continue;
-    addCandidate(
-      tag,
-      ind1,
-      ind2,
-      marcSubfieldValues(field, 'b'),
-      marcSubfieldValues(field, 'c')
-    );
-  }
-
-  // Algunas instalaciones de Koha devuelven el registro como MARCXML.
-  const xml = typeof marc === 'string' ? marc : '';
-  if (xml) {
-    const fieldMatches = [...xml.matchAll(/<datafield\b([^>]*)\btag=["'](264|260)["']([^>]*)>([\s\S]*?)<\/datafield>/gi)];
-    for (const match of fieldMatches) {
-      const tag = match[2];
-      const attrs = `${match[1]} ${match[3]}`;
-      const ind1 = attrs.match(/ind1=["']([^"']*)["']/i)?.[1] || '';
-      const ind2 = attrs.match(/ind2=["']([^"']*)["']/i)?.[1] || '';
-      if (tag === '264' && ind2 && ind2 !== '1') continue;
-      const body = match[4];
-      const getCode = code => [...body.matchAll(new RegExp(`<subfield\\b[^>]*code=["']${code}["'][^>]*>([\\s\\S]*?)<\\/subfield>`, 'gi'))]
-        .map(item => item[1].replace(/<[^>]+>/g, ''));
-      addCandidate(tag, ind1, ind2, getCode('b'), getCode('c'));
-    }
-  }
-
-  candidates.sort((a, b) => a.priority - b.priority);
-  const selected = candidates[0];
-  return selected
-    ? { publisher: selected.publisher, year: selected.year }
-    : { publisher: '', year: '' };
-}
-
-
-function decodeHtmlEntities(value) {
-  return String(value || '')
-    .replace(/&nbsp;|&#160;/gi, ' ')
-    .replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)));
+  return fields;
 }
 
 /**
- * Koha REST /biblios normalmente entrega los campos normalizados, pero no
- * necesariamente el MARC completo. Como respaldo consulta showmarc.pl,
- * que es la misma vista MARC que ofrece el OPAC.
+ * Extrae { place, publisher, year } del MARC que Koha incluya en el registro
+ * JSON (objeto estructurado o MARCXML como cadena). Comparte las reglas de
+ * prioridad con el parser de MARCXML (ver marc.js).
  */
-function extractMarcPublicationFromHtml(html) {
-  const source = String(html || '');
-  if (!source) return { publisher: '', year: '' };
+function extractMarcPublication(record) {
+  const marc = record?.marc ?? record?.marc_record ?? record?.marc_data ?? record?.marcxml;
 
-  // Si showmarc devuelve MARCXML incrustado, reutiliza el extractor principal.
-  const xmlMatch = source.match(/<record\b[\s\S]*?<\/record>/i);
-  if (xmlMatch) {
-    const parsed = extractMarcPublication({ marcxml: xmlMatch[0] });
-    if (parsed.publisher || parsed.year) return parsed;
+  if (typeof marc === 'string') {
+    return parseMarcXmlPublication(marc);
   }
 
-  const candidates = [];
-  const add = (ind1, ind2, body) => {
-    if (ind2 && ind2 !== '1') return;
-    const normalized = decodeHtmlEntities(String(body || '').replace(/<[^>]*>/g, ' '))
-      .replace(/\s+/g, ' ').trim();
-    const subfields = [...normalized.matchAll(/(?:\$|‡|\|)\s*([a-z0-9])\s*/gi)];
-    const values = {};
-    for (let i = 0; i < subfields.length; i++) {
-      const code = subfields[i][1].toLowerCase();
-      const start = subfields[i].index + subfields[i][0].length;
-      const end = i + 1 < subfields.length ? subfields[i + 1].index : normalized.length;
-      (values[code] ||= []).push(normalized.slice(start, end).trim());
-    }
-    const publishers = (values.b || []).map(cleanMarcText).filter(Boolean);
-    const dates = (values.c || []).map(cleanMarcText).filter(Boolean);
-    if (publishers.length || dates.length) {
-      candidates.push({
-        priority: ind1 === '3' && ind2 === '1' ? 0 : 1,
-        publisher: publishers.join('; '),
-        year: dates[0] || ''
-      });
-    }
-  };
+  const candidates = marcFieldsOf(marc).map((field, order) => buildCandidate({
+    tag: String(field?.tag ?? field?.field ?? field?.marcTag ?? ''),
+    ind1: field?.ind1 ?? field?.indicator1 ?? field?.indicators?.[0] ?? field?.indicators?.ind1 ?? '',
+    ind2: field?.ind2 ?? field?.indicator2 ?? field?.indicators?.[1] ?? field?.indicators?.ind2 ?? '',
+    places: marcSubfieldValues(field, 'a'),
+    publishers: marcSubfieldValues(field, 'b'),
+    dates: marcSubfieldValues(field, 'c'),
+    order
+  }));
 
-  // Vista HTML de Koha: cada campo MARC suele representarse en una fila.
-  const rows = [...source.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].map(m => m[1]);
-  for (const row of rows) {
-    const cells = [...row.matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)]
-      .map(m => decodeHtmlEntities(m[1].replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim());
-    if (cells[0] === '264' && cells.length >= 4) {
-      add(cells[1], cells[2], cells.slice(3).join(' '));
-    } else {
-      const plain = decodeHtmlEntities(row.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ');
-      const match = plain.match(/\b264\s+([0-9 ])\s*([0-9 ])\s*([\s\S]*)/);
-      if (match) add(match[1].trim(), match[2].trim(), match[3]);
-    }
-  }
-
-  // Algunas plantillas presentan los campos MARC en texto preformateado.
-  if (!candidates.length) {
-    const plain = decodeHtmlEntities(source.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ');
-    const regex = /\b264\s+([0-9 ])\s*([0-9 ])\s*([\s\S]*?)(?=\b(?:245|250|260|300|336|337|338|490|500|650|700|856)\s+[0-9 ]{2}\b|$)/g;
-    for (const match of plain.matchAll(regex)) add(match[1].trim(), match[2].trim(), match[3]);
-  }
-
-  candidates.sort((a, b) => a.priority - b.priority);
-  const selected = candidates[0];
-  return selected ? { publisher: selected.publisher, year: selected.year } : { publisher: '', year: '' };
+  return selectPublication(candidates);
 }
 
-async function fetchMarcPublication(config, biblioId) {
-  if (!biblioId) return { publisher: '', year: '' };
-  const baseUrl = String(config.marcBaseUrl || config.baseUrl).replace(/\/+$/, '');
-  const url = new URL(`${baseUrl}/cgi-bin/koha/catalogue/showmarc.pl`);
-  url.searchParams.set('id', String(biblioId));
-  url.searchParams.set('viewas', 'html');
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), config.timeoutMs);
-  try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Authorization: buildAuthHeader(config.username, config.password),
-        Accept: 'text/html,application/xhtml+xml'
-      },
-      signal: controller.signal
-    });
-    if (!response.ok) return { publisher: '', year: '' };
-    return extractMarcPublicationFromHtml(await response.text());
-  } catch (_) {
-    // El fallo de la vista MARC no debe impedir mostrar el resultado del catálogo.
-    return { publisher: '', year: '' };
-  } finally {
-    clearTimeout(timer);
+// ---------------------------------------------------------------------------
+// MARCXML por la API REST: GET /api/v1/biblios/{biblio_id}
+// ---------------------------------------------------------------------------
+
+/**
+ * Descarga el registro MARCXML de un biblio. Lanza KohaError si el id no es
+ * válido, si Koha responde con error HTTP, si no hay conexión o si el cuerpo
+ * está vacío o no es MARCXML.
+ */
+async function getBiblioMarcXml(config, biblioId) {
+  const id = String(biblioId ?? '').trim();
+  if (!/^\d+$/.test(id)) {
+    throw new KohaError('El identificador bibliográfico no es válido.', 400, 'invalid_biblio_id');
   }
+
+  const body = await kohaRequest(config, `/biblios/${id}`, {
+    accept: MARCXML_ACCEPT,
+    baseUrl: config.marcBaseUrl || config.baseUrl
+  });
+
+  if (!body || !body.trim()) {
+    throw new KohaError('Koha devolvió un registro MARC vacío.', 502, 'koha_empty_marc');
+  }
+  if (!looksLikeMarcXml(body)) {
+    throw new KohaError('Koha no devolvió un registro MARCXML válido.', 502, 'koha_invalid_marcxml');
+  }
+  return body;
+}
+
+// Caché en memoria por instancia serverless (se reinicia en cada arranque en frío).
+// Guarda promesas: varias búsquedas simultáneas del mismo biblio comparten una sola petición.
+const marcCache = new Map();
+
+function clearMarcCache() {
+  marcCache.clear();
+}
+
+function marcCacheKey(config, biblioId) {
+  return `${config.marcBaseUrl || config.baseUrl}|${biblioId}`;
+}
+
+function rememberMarc(key, entry) {
+  marcCache.delete(key);
+  marcCache.set(key, entry);
+  while (marcCache.size > MARC_CACHE_MAX_ENTRIES) {
+    marcCache.delete(marcCache.keys().next().value); // descarta la entrada más antigua
+  }
+}
+
+/**
+ * Devuelve { place, publisher, year } de un biblio usando su MARCXML,
+ * con caché y sin repetir peticiones. Propaga el KohaError si falla.
+ */
+function getBiblioPublication(config, biblioId) {
+  const key = marcCacheKey(config, biblioId);
+  const cached = marcCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.promise;
+
+  const configuredTtl = config.marcCacheTtlMs == null ? NaN : Number(config.marcCacheTtlMs);
+  const ttl = Number.isFinite(configuredTtl) && configuredTtl >= 0
+    ? configuredTtl
+    : DEFAULT_MARC_CACHE_TTL_MS;
+
+  const promise = getBiblioMarcXml(config, biblioId).then(parseMarcXmlPublication);
+  const entry = { promise, expiresAt: Date.now() + ttl };
+  rememberMarc(key, entry);
+
+  promise.catch(() => {
+    // Un fallo solo se recuerda brevemente: permite recuperarse pronto sin saturar a Koha.
+    entry.expiresAt = Math.min(entry.expiresAt, Date.now() + MARC_FAILURE_TTL_MS);
+  });
+  return promise;
+}
+
+async function mapWithConcurrency(items, limit, worker) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const workerCount = Math.min(Math.max(limit, 1), items.length);
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await worker(items[index], index);
+    }
+  }));
+  return results;
+}
+
+function needsMarcPublication(biblio) {
+  // El lugar se completa de paso cuando se consulta el MARC, pero por sí solo
+  // no justifica una petición extra.
+  return Boolean(biblio.biblioId) && (!biblio.publisher || !biblio.year);
+}
+
+/**
+ * Completa editorial, año y lugar faltantes con el MARCXML de la API REST.
+ * - Solo consulta registros a los que les falta editorial o año.
+ * - Nunca sobrescribe un dato válido que ya traiga el registro.
+ * - Un fallo individual deja el registro intacto y no interrumpe la búsqueda.
+ */
+async function enrichWithMarcPublication(config, biblios) {
+  const pending = biblios.filter(needsMarcPublication);
+  if (!pending.length) return biblios;
+
+  const concurrency = Number(config.marcConcurrency) || DEFAULT_MARC_CONCURRENCY;
+  const budgetMs = Number(config.marcBudgetMs) > 0 ? Number(config.marcBudgetMs) : DEFAULT_MARC_BUDGET_MS;
+  const deadline = Date.now() + budgetMs;
+
+  await mapWithConcurrency(pending, concurrency, async biblio => {
+    if (Date.now() > deadline) return; // presupuesto agotado: se entrega lo que ya hay
+    try {
+      const marc = await getBiblioPublication(config, biblio.biblioId);
+      biblio.publisher = firstText(biblio.publisher, marc.publisher) || null;
+      biblio.year = firstText(biblio.year, marc.year) || null;
+      biblio.place = firstText(biblio.place, marc.place) || null;
+    } catch (error) {
+      console.warn('Booky Koha MARCXML no disponible:', {
+        biblioId: biblio.biblioId,
+        code: error?.code || 'unknown',
+        status: error?.status || 0
+      });
+    }
+  });
+
+  return biblios;
 }
 
 function normalizeBiblio(record, baseUrl) {
@@ -304,11 +306,11 @@ function normalizeBiblio(record, baseUrl) {
   const author = firstText(record?.author, record?.main_author, record?.marc?.author);
   const isbn = firstText(record?.isbn, record?.isbn_list, record?.biblioitem?.isbn);
   const marcPublication = extractMarcPublication(record);
-  // En el catálogo ITSON, el dato bibliográfico de editorial es 264 $b
-  // (segundo indicador 1 = publicación). Priorizar MARC evita que un campo
-  // simplificado vacío, genérico o desactualizado lo sobrescriba.
+  // Si el JSON ya trae MARC (264 con 2.º indicador 1), tiene prioridad sobre los
+  // campos simplificados. La fecha de copyright NO se usa como año de publicación.
   const publisher = firstText(marcPublication.publisher, record?.publisher, record?.publisher_name);
-  const year = firstText(marcPublication.year, record?.publication_year, record?.copyright_date, record?.date);
+  const year = firstText(marcPublication.year, record?.publication_year, record?.date);
+  const place = firstText(marcPublication.place, record?.publication_place, record?.place);
   const edition = firstText(record?.edition_statement, record?.edition);
   const url = id
     ? `${baseUrl}/cgi-bin/koha/opac-detail.pl?biblionumber=${encodeURIComponent(id)}`
@@ -320,6 +322,7 @@ function normalizeBiblio(record, baseUrl) {
     author: author || 'Autor no proporcionado',
     isbn: isbn || null,
     publisher: publisher || null,
+    place: place || null,
     year: year || null,
     edition: edition || null,
     url
@@ -423,42 +426,27 @@ async function searchBiblios(config, rawQuery, options = {}) {
     if (batch.length < perPage) break;
   }
 
-  const biblios = await Promise.all(records.map(async record => {
-    const normalized = normalizeBiblio(record, config.baseUrl);
-    // La API REST no siempre incluye el MARC. Recupera 264 31 desde
-    // showmarc.pl solo cuando faltan editorial o año.
-    if (config.marcBaseUrl && (!normalized.publisher || !normalized.year) && normalized.biblioId) {
-      const marc = await fetchMarcPublication(config, normalized.biblioId);
-      normalized.publisher = firstText(marc.publisher, normalized.publisher) || null;
-      normalized.year = firstText(marc.year, normalized.year) || null;
-    }
-    return normalized;
-  }));
-  const unique = [...new Map(biblios.map(record => [
+  const normalized = records.map(record => normalizeBiblio(record, config.baseUrl));
+  const unique = [...new Map(normalized.map(record => [
     String(record.biblioId || `${record.title}|${record.author}|${record.isbn}`), record
   ])).values()];
+
+  // Se completa después de eliminar duplicados para no consultar dos veces el mismo registro.
+  await enrichWithMarcPublication(config, unique);
 
   if (options.includeItems === false) {
     return { query, totalReturned: unique.length, pagesFetched, results: unique };
   }
 
   // Limita la concurrencia para evitar saturar la API REST de Koha.
-  const queue = unique;
-  const enriched = new Array(queue.length);
-  let cursor = 0;
-  const workerCount = Math.min(4, queue.length);
-  await Promise.all(Array.from({ length: workerCount }, async () => {
-    while (cursor < queue.length) {
-      const index = cursor++;
-      const biblio = queue[index];
-      try {
-        const items = await getItems(config, biblio.biblioId);
-        enriched[index] = { ...biblio, items };
-      } catch {
-        enriched[index] = { ...biblio, items: [], itemsUnavailable: true };
-      }
+  const enriched = await mapWithConcurrency(unique, 4, async biblio => {
+    try {
+      const items = await getItems(config, biblio.biblioId);
+      return { ...biblio, items };
+    } catch {
+      return { ...biblio, items: [], itemsUnavailable: true };
     }
-  }));
+  });
 
   return { query, totalReturned: enriched.length, pagesFetched, results: enriched };
 }
@@ -536,9 +524,14 @@ module.exports = {
   isConfigured,
   searchBiblios,
   getItems,
+  getBiblioMarcXml,
+  getBiblioPublication,
+  enrichWithMarcPublication,
+  clearMarcCache,
   searchPatronByCardnumber,
   normalizePatron,
   extractMarcPublication,
-  extractMarcPublicationFromHtml,
+  parseMarcXmlPublication,
+  cleanMarcText,
   normalizeBiblio
 };

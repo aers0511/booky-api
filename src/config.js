@@ -40,7 +40,11 @@ function getConfig() {
       enabled: String(process.env.KOHA_ENABLED || 'false').toLowerCase() === 'true',
       askCampus: String(process.env.KOHA_ASK_CAMPUS || 'true').toLowerCase() === 'true',
       baseUrl: kohaBase,
-      marcBaseUrl: (process.env.KOHA_MARC_BASE_URL || 'https://sib-intra.itson.edu.mx').trim().replace(/\/+$/, ''),
+      // Por defecto el MARCXML se pide al mismo dominio que el resto de la API REST.
+      marcBaseUrl: (process.env.KOHA_MARC_BASE_URL || kohaBase).trim().replace(/\/+$/, ''),
+      marcConcurrency: Math.min(Math.max(Number(process.env.KOHA_MARC_CONCURRENCY || 4), 1), 8),
+      marcCacheTtlMs: Math.max(Number(process.env.KOHA_MARC_CACHE_TTL_MS || 6 * 60 * 60 * 1000), 0),
+      marcBudgetMs: Math.max(Number(process.env.KOHA_MARC_BUDGET_MS || 8000), 1000),
       apiPath: (process.env.KOHA_API_PATH || '/api/v1').replace(/^\/?/, '/').replace(/\/+$/, ''),
       username: process.env.KOHA_API_USERNAME || '',
       password: process.env.KOHA_API_PASSWORD || '',

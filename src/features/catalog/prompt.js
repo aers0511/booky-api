@@ -18,6 +18,7 @@ function buildCatalogContext(search) {
     lines.push(`Autor: ${record.author}`);
     if (record.isbn) lines.push(`ISBN: ${record.isbn}`);
     if (record.publisher) lines.push(`Editorial: ${record.publisher}`);
+    if (record.place) lines.push(`Lugar de publicación: ${record.place}`);
     if (record.year) lines.push(`Año: ${record.year}`);
     if (record.edition) lines.push(`Edición: ${record.edition}`);
     if (record.url) lines.push(`Enlace al registro: ${record.url}`);
