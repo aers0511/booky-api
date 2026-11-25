@@ -20,7 +20,7 @@ function buildAuthHeader(username, password) {
   return 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64');
 }
 
-async function kohaGet(config, path, query = {}) {
+async function kohaGet(config, path, query = {}, accept = 'application/json') {
   const url = new URL(
     `${config.baseUrl}${config.apiPath}${path.startsWith('/') ? path : '/' + path}`
   );
@@ -39,7 +39,7 @@ async function kohaGet(config, path, query = {}) {
       method: 'GET',
       headers: {
         'Authorization': buildAuthHeader(config.username, config.password),
-        'Accept': 'application/json'
+        'Accept': accept
       },
       signal: controller.signal
     });
@@ -159,8 +159,8 @@ function extractMarcPublication(record) {
   for (const field of fields) {
     const tag = String(field?.tag ?? field?.field ?? field?.marcTag ?? '');
     if (tag !== '264' && tag !== '260') continue;
-    const ind1 = String(field?.ind1 ?? field?.indicator1 ?? field?.indicators?.[0] ?? field?.indicators?.ind1 ?? '');
-    const ind2 = String(field?.ind2 ?? field?.indicator2 ?? field?.indicators?.[1] ?? field?.indicators?.ind2 ?? '');
+    const ind1 = String(field?.ind1 ?? field?.indicator1 ?? field?.indicators?.[0] ?? field?.indicators?.ind1 ?? '').trim();
+    const ind2 = String(field?.ind2 ?? field?.indicator2 ?? field?.indicators?.[1] ?? field?.indicators?.ind2 ?? '').trim();
     if (tag === '264' && ind2 && ind2 !== '1') continue;
     addCandidate(
       tag,
@@ -178,8 +178,8 @@ function extractMarcPublication(record) {
     for (const match of fieldMatches) {
       const tag = match[2];
       const attrs = `${match[1]} ${match[3]}`;
-      const ind1 = attrs.match(/ind1=["']([^"']*)["']/i)?.[1] || '';
-      const ind2 = attrs.match(/ind2=["']([^"']*)["']/i)?.[1] || '';
+      const ind1 = (attrs.match(/ind1=["']([^"']*)["']/i)?.[1] || '').trim();
+      const ind2 = (attrs.match(/ind2=["']([^"']*)["']/i)?.[1] || '').trim();
       if (tag === '264' && ind2 && ind2 !== '1') continue;
       const body = match[4];
       const getCode = code => [...body.matchAll(new RegExp(`<subfield\\b[^>]*code=["']${code}["'][^>]*>([\\s\\S]*?)<\\/subfield>`, 'gi'))]
@@ -273,6 +273,17 @@ async function getItems(config, biblioId) {
   return asArray(data).map(normalizeItem);
 }
 
+async function getMarcPublication(config, biblioId) {
+  if (!biblioId) return { publisher: '', year: '' };
+  const marcxml = await kohaGet(
+    config,
+    `/biblios/${encodeURIComponent(biblioId)}`,
+    {},
+    'application/marcxml+xml'
+  );
+  return extractMarcPublication({ marcxml });
+}
+
 async function searchBiblios(config, rawQuery, options = {}) {
   if (!isConfigured(config)) {
     throw new KohaError(
@@ -339,8 +350,18 @@ async function searchBiblios(config, rawQuery, options = {}) {
       const index = cursor++;
       const biblio = queue[index];
       try {
-        const items = await getItems(config, biblio.biblioId);
-        enriched[index] = { ...biblio, items };
+        const [items, marcPub] = await Promise.all([
+          getItems(config, biblio.biblioId),
+          (!biblio.publisher || !biblio.year)
+            ? getMarcPublication(config, biblio.biblioId).catch(() => ({ publisher: '', year: '' }))
+            : Promise.resolve({ publisher: '', year: '' })
+        ]);
+        enriched[index] = {
+          ...biblio,
+          publisher: biblio.publisher || marcPub.publisher || null,
+          year: biblio.year || marcPub.year || null,
+          items
+        };
       } catch {
         enriched[index] = { ...biblio, items: [], itemsUnavailable: true };
       }
