@@ -39,7 +39,7 @@ const baseConfig = (overrides = {}) => ({
 });
 
 /**
- * Simula fetch: el listado JSON (/biblios) y el MARCXML (/biblios/{id}).
+ * Simula fetch: el listado JSON (/biblios) y el MARCXML (/public/biblios/{id}).
  * Usa objetos Response reales para que la decodificación UTF-8 sea la del runtime.
  */
 function installFetch({ rows = [], marc = {} }) {
@@ -50,7 +50,7 @@ function installFetch({ rows = [], marc = {} }) {
 
   global.fetch = async (url, options = {}) => {
     const parsed = new URL(url);
-    const idMatch = parsed.pathname.match(/\/api\/v1\/biblios\/(\d+)$/);
+    const idMatch = parsed.pathname.match(/\/api\/v1\/public\/biblios\/(\d+)$/);
 
     if (!idMatch) {
       calls.search.push({ url: parsed, options });
@@ -191,22 +191,22 @@ test('ignora marcadores de dato desconocido como [s.n.] y [S.l.]', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Cliente REST: GET /api/v1/biblios/{biblio_id}
+// Cliente REST Koha 25.11: GET /api/v1/public/biblios/{biblio_id}
 // ---------------------------------------------------------------------------
 
-test('pide el MARCXML a /api/v1/biblios/{id} con Basic y Accept marcxml', async () => {
+test('pide el MARCXML a /api/v1/public/biblios/{id} con Basic y Accept marcxml', async () => {
   const fetchMock = installFetch({ marc: { 45506: RECORD_45506 } });
   try {
     await getBiblioMarcXml(baseConfig({ baseUrl: 'https://sib.itson.edu.mx' }), 45506);
     const [call] = fetchMock.calls.marc;
-    assert.equal(call.url.href, 'https://sib.itson.edu.mx/api/v1/biblios/45506');
+    assert.equal(call.url.href, 'https://sib.itson.edu.mx/api/v1/public/biblios/45506');
     assert.equal(call.options.headers.Accept, 'application/marcxml+xml');
     assert.equal(
       call.options.headers.Authorization,
       'Basic ' + Buffer.from('reader:secret').toString('base64')
     );
+    assert.ok(call.url.pathname.includes('/public/biblios/'));
     assert.ok(!call.url.pathname.includes('showmarc'));
-    assert.ok(!call.url.pathname.includes('/public/'));
   } finally { fetchMock.restore(); }
 });
 

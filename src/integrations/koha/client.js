@@ -175,7 +175,7 @@ function extractMarcPublication(record) {
 }
 
 // ---------------------------------------------------------------------------
-// MARCXML por la API REST: GET /api/v1/biblios/{biblio_id}
+// MARCXML por la API REST de Koha 25.11: GET /api/v1/public/biblios/{biblio_id}
 // ---------------------------------------------------------------------------
 
 /**
@@ -189,7 +189,7 @@ async function getBiblioMarcXml(config, biblioId) {
     throw new KohaError('El identificador bibliográfico no es válido.', 400, 'invalid_biblio_id');
   }
 
-  const body = await kohaRequest(config, `/biblios/${id}`, {
+  const body = await kohaRequest(config, `/public/biblios/${id}`, {
     accept: MARCXML_ACCEPT,
     baseUrl: config.marcBaseUrl || config.baseUrl
   });
